@@ -4,10 +4,6 @@ struct Ray
   dir::Vec3
 end
 
-
-
-
-
 "Linear interpolation between `a` and `b` by factor `mix`"
 mix(a, b, mix::Real) = b * mix + a * (1 - mix)
 
@@ -51,13 +47,14 @@ function rayintersect(r::Ray, s::Sphere{T})::Intersection where T
   Intersection(radius2 - d2, t0, t1)
 end
 
-function geomintersect(r::Ray, spheres::Vector{<:Sphere})::Union{Void, Geometry}
+"`x`, where `x ∈ scene` and "
+function sceneintersect(r::Ray, scene::ListScene)::Union{Void, Geometry}
   tnear = Inf # FIXME: Type stability
   areintersections = false
 
   # Determine whether this ray hits any of the spheres, and if so, which one
   hit = false
-  sphere = spheres[1] # 1 is arbitrary
+  sphere = first(scene) # 1 is arbitrary
   for (i, target_sphere) in enumerate(spheres)
     # FIXME: Get rid of these constants
     t0 = Inf
@@ -90,26 +87,25 @@ function normal(r::Ray, sphere::Sphere)
 end
 
 "Light contribution from all objects in scene"
-function light(geoms::Vector{<:Geometry})
+function light(scene::Scene)
   surface_color = Vec3([0.0, 0.0, 0.0])
-  for i = 1:length(spheres)
-    if geoms[i].emission_color[1] > 0.0
-      # this is a light
+  for i = 1:length(scene)
+    if scene[i].emission_color[1] > 0.0 # scene[i] is a light
       transmission = 1.0
-      light_dir = geoms[i].center - phit  # FIXME: Don't have this
+      light_dir = scene[i].center - phit  # FIXME: Don't have this
       light_dir = normalize(light_dir)
 
-      for j = 1:length(geoms)
+      for j = 1:length(scene)
         if (i != j)
           r2 = Ray(phit + nhit * bias, light_dir)
-          inter = rayintersect(r2, geoms[j])
+          inter = rayintersect(r2, scene[j])
           if (inter.doesintersect > 0)
             transmission = 0.0
           end
         end
       end
       lhs = surface_color(sphere) * transmission * rlu(dot_(nhit, light_dir))
-      surface_color += map(*, lhs, geoms[i].emission_color)
+      surface_color += map(*, lhs, scene[i].emission_color)
     end
   end
   surface_color
@@ -117,12 +113,12 @@ end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function trc(r::Ray,
-             geoms::Vector{<:Geometry},
+             scene::Scene,
              depth::Integer,
              background::Vec3=Vec3([2.0, 2.0, 2.0]))
-  geom = geomintersect(r, geoms)
+  geom = sceneintersect(r, scene)
   # FIXME: What is the right thing here? missing, None, Nothing
-  if isnothing(geom)
+  if isnull(geom)
     return background
   else
     nhit = normal(r, geom)
@@ -147,23 +143,23 @@ function trc(r::Ray,
       fresneleffect = mix((1.0 - facingratio)^3, 1.0, 0.1)
 
       # reflection direction (already normalized)
-      refldir = r.dir - nhit * 2 * dot_(r.dir, nhit)
-      refldir = simplenormalize(refldir);
-      reflection = trc(Ray(phit + nhit * bias, refldir), spheres, depth + 1, background)
+      refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
+      reflray = Ray(phit + nhit * bias, refldir)
+      reflection = trc(reflray, scene, depth + 1, background)
 
       # the result is a mix of reflection and refraction (if the sphere is transparent)
       prod = reflection * fresneleffect
       surface_color = map(*, prod, surface_color(geom))
     else
       # Each light contributes to pixel colour
-      surface_color = light(geoms)
+      surface_color = light(scene)
     end
     surface_color + emission_color(geom)
   end
 end
 
 "Render `spheres` to image of given `width` and `height`"
-function render(spheres::Vector{<:Sphere},
+function render(scene::Scene,
                 width::Integer=480,
                 height::Integer=320,
                 fov::Real=30.0)
@@ -178,7 +174,7 @@ function render(spheres::Vector{<:Sphere},
     yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
     minus1 = -1.0
     raydir = simplenormalize(Vec3([xx, yy, -1.0]))
-    pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), spheres, 0)
+    pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), scene, 0)
     image[x, y, :] = pixel
   end
   image

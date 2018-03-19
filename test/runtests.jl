@@ -1,5 +1,7 @@
 using RayTrace
 import RayTrace: Sphere, Vec3
+using Colors
+using ImageView
 
 "Some example spheres which should create actual image"
 function example_spheres()
@@ -33,3 +35,7 @@ end
 
 img_ = render_example_spheres()
 img = rgbimg(img_)
+
+function show_img()
+  ImageView.imshow(img)
+end
