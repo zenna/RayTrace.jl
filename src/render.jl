@@ -115,9 +115,9 @@ end
 function trc(r::Ray,
              scene::Scene,
              depth::Integer,
-             background::Vec3=Vec3([2.0, 2.0, 2.0]))
+             background::Vec3=Vec3([2.0, 2.0, 2.0]),
+             bias = 1e-4)
   geom = sceneintersect(r, scene)
-  # FIXME: What is the right thing here? missing, None, Nothing
   if isnull(geom)
     return background
   else
@@ -126,7 +126,7 @@ function trc(r::Ray,
     # reverse the normal direction. That also means we are inside the sphere so
     # set the inside bool to true. Finally reverse the sign of IdotN which we
     # want positive.
-    bias = 1e-4   # add some bias to the point from which we will be tracing
+    # add some bias to the point from which we will be tracing
     inside = false
 
     if dot_(r.dir, nhit) > 0.0
@@ -135,6 +135,9 @@ function trc(r::Ray,
     end
 
     # Another bounce if obj isn't reflective and not transparent
+    # Problem: Data dependent branching
+    # Want to split some of the branch and not some of the rest
+    # 
     if ((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1)
       minusrdir = r.dir * -1.0
       facingratio = dot_(minusrdir, nhit)
@@ -158,7 +161,7 @@ function trc(r::Ray,
   end
 end
 
-"Render `spheres` to image of given `width` and `height`"
+"Render `scene` to image of given `width` and `height`"
 function render(scene::Scene,
                 width::Integer=480,
                 height::Integer=320,
