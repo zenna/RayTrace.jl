@@ -1,4 +1,3 @@
-"Sphere"
 struct Sphere{T} <: Geometry
   center::Vec3{T}  # position of center the sphere
   radius::T      # radius of sphere

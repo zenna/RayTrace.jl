@@ -33,29 +33,29 @@ function rayintersect(r::Ray, s::Sphere{T})::Intersection where T
   radius2 = s.radius^2
 
   if tca < 0
-    return Intersection(tca, zero{T}, zero{T})
+    return Intersection{T}(tca, zero(T), zero(T))
   end
 
   d2 = dot_(l, l) - tca * tca
   if d2 > radius2
-    return Intersection(s.radius - d2, zero{T}, zero{T})
+    return Intersection{T}(s.radius - d2, zero(T), zero(T))
   end
 
   thc = sqrt(radius2 - d2)
   t0 = tca - thc
   t1 = tca + thc
-  Intersection(radius2 - d2, t0, t1)
+  Intersection{T}(radius2 - d2, t0, t1)
 end
 
 "`x`, where `x ∈ scene` and "
-function sceneintersect(r::Ray, scene::ListScene)::Union{Void, Geometry}
-  tnear = Inf # FIXME: Type stability
+function sceneintersect(r::Ray, scene::ListScene)
+  tnear = Inf # closest intersection point, FIXME: Type stability
   areintersections = false
 
   # Determine whether this ray hits any of the spheres, and if so, which one
   hit = false
   sphere = first(scene) # 1 is arbitrary
-  for (i, target_sphere) in enumerate(spheres)
+  for (i, target_sphere) in enumerate(scene)
     # FIXME: Get rid of these constants
     t0 = Inf
     t1 = Inf
@@ -67,48 +67,50 @@ function sceneintersect(r::Ray, scene::ListScene)::Union{Void, Geometry}
       end
       if inter.t0 < tnear
         tnear = inter.t0
-        sphere = spheres[i]
+        sphere = scene[i]
         hit = true
       end
     end
   end
   if hit
-    return sphere
+    return sphere, tnear
   else
-    return nothing
+    return nothing, tnear
   end
 end
 
+"Position where ray hits object"
+hitposition(r::Ray, tnear) = r.orig + r.dir * tnear 
+
 "Normal between `r` and `sphere`"
-function normal(r::Ray, sphere::Sphere)
-  phit = r.orig + r.dir * tnear # Problem is we don't have this, don't want to recompute
-  nhit = phit - center(sphere)
+function normal(hitpos::Vec3, sphere::Sphere, tnear::Real)
+  nhit = hitpos - center(sphere)
   nhit = simplenormalize(nhit)
 end
 
 "Light contribution from all objects in scene"
-function light(scene::Scene)
-  surface_color = Vec3([0.0, 0.0, 0.0])
+function light(scene::Scene, geom::Geometry, hitpos::Vec3, nhit::Vec3, bias = 1e-4)
+  surface_color_ = Vec3([0.0, 0.0, 0.0])
   for i = 1:length(scene)
     if scene[i].emission_color[1] > 0.0 # scene[i] is a light
       transmission = 1.0
-      light_dir = scene[i].center - phit  # FIXME: Don't have this
+      light_dir = scene[i].center - hitpos  # FIXME: Don't have this
       light_dir = normalize(light_dir)
 
       for j = 1:length(scene)
         if (i != j)
-          r2 = Ray(phit + nhit * bias, light_dir)
+          r2 = Ray(hitpos + nhit * bias, light_dir)
           inter = rayintersect(r2, scene[j])
           if (inter.doesintersect > 0)
             transmission = 0.0
           end
         end
       end
-      lhs = surface_color(sphere) * transmission * rlu(dot_(nhit, light_dir))
-      surface_color += map(*, lhs, scene[i].emission_color)
+      lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
+      surface_color_ += map(*, lhs, scene[i].emission_color)
     end
   end
-  surface_color
+  surface_color_
 end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
@@ -117,11 +119,13 @@ function trc(r::Ray,
              depth::Integer,
              background::Vec3=Vec3([2.0, 2.0, 2.0]),
              bias = 1e-4)
-  geom = sceneintersect(r, scene)
-  if isnull(geom)
+  geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  hitpos = hitposition(r, tnear)
+  if geom == nothing
     return background
   else
-    nhit = normal(r, geom)
+    # return Vec3([0.5, 0.5, 0.5])
+    nhit = normal(hitpos, geom, tnear)
     # If the normal and the view direction are not opposite to each other
     # reverse the normal direction. That also means we are inside the sphere so
     # set the inside bool to true. Finally reverse the sign of IdotN which we
@@ -136,8 +140,8 @@ function trc(r::Ray,
 
     # Another bounce if obj isn't reflective and not transparent
     # Problem: Data dependent branching
+    # Want blem: Data dependent branching
     # Want to split some of the branch and not some of the rest
-    # 
     if ((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1)
       minusrdir = r.dir * -1.0
       facingratio = dot_(minusrdir, nhit)
@@ -147,24 +151,24 @@ function trc(r::Ray,
 
       # reflection direction (already normalized)
       refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
-      reflray = Ray(phit + nhit * bias, refldir)
-      reflection = trc(reflray, scene, depth + 1, background)
+      reflray = Ray(hitpos + nhit * bias, refldir)
+      reflection_ = trc(reflray, scene, depth + 1, background)
 
-      # the result is a mix of reflection and refraction (if the sphere is transparent)
-      prod = reflection * fresneleffect
-      surface_color = map(*, prod, surface_color(geom))
+      # the result is a mix of reflection_ and refraction (if the sphere is transparent)
+      prod = reflection_ * fresneleffect
+      surface_color_ = map(*, prod, surface_color(geom))
     else
       # Each light contributes to pixel colour
-      surface_color = light(scene)
+      surface_color_ = light(scene, geom, hitpos, nhit, bias)
     end
-    surface_color + emission_color(geom)
+    surface_color_ + emission_color(geom)
   end
 end
 
 "Render `scene` to image of given `width` and `height`"
 function render(scene::Scene,
-                width::Integer=480,
-                height::Integer=320,
+                width::Integer=2,
+                height::Integer=2,
                 fov::Real=30.0)
   inv_width = 1 / width
   angle = tan(pi * 0.5 * fov / 100.0)
@@ -184,8 +188,8 @@ function render(scene::Scene,
 end
 
 "Generate ray dirs and ray origins"
-function rdirs_rorigs(width::Integer=480,
-                      height::Integer=320,
+function rdirs_rorigs(width::Integer=200,
+                      height::Integer=200,
                       fov::Real=30.0)
   inv_width = 1 / width
   angle = tan(pi * 0.5 * fov / 100.0)
