@@ -113,6 +113,25 @@ function light(scene::Scene, geom::Geometry, hitpos::Vec3, nhit::Vec3, bias = 1e
   surface_color_
 end
 
+sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
+
+"Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
+function trcdepth(r::Ray,
+                  scene::Scene,
+                  depth::Integer,
+                  background::Vec3=Vec3([2.0, 2.0, 2.0]),
+                  bias = 1e-4)
+  geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  hitpos = hitposition(r, tnear)
+  if geom == nothing
+    return background
+  else
+    # @show sigtnear = sigmoid(tnear, k=0.001 )
+    sigtnear = 0.5
+    Vec3([sigtnear, sigtnear, sigtnear])
+  end
+end
+
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function trc(r::Ray,
              scene::Scene,
@@ -167,9 +186,10 @@ end
 
 "Render `scene` to image of given `width` and `height`"
 function render(scene::Scene,
-                width::Integer=2,
-                height::Integer=2,
-                fov::Real=30.0)
+                width::Integer=100,
+                height::Integer=100,
+                fov::Real=30.0,
+                trc=trc)
   inv_width = 1 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1 / height

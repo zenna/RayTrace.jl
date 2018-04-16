@@ -11,5 +11,6 @@ include("geometry/geometry.jl")
 include("geometry/sphere.jl")
 include("scene.jl")
 include("render.jl")
+include("view.jl")
 
 end
