@@ -95,7 +95,7 @@ function light(scene::Scene, geom::Geometry, hitpos::Vec3, nhit::Vec3, bias = 1e
     if scene[i].emission_color[1] > 0.0 # scene[i] is a light
       transmission = 1.0
       light_dir = scene[i].center - hitpos  # FIXME: Don't have this
-      light_dir = normalize(light_dir)
+      light_dir = simplenormalize(light_dir)
 
       for j = 1:length(scene)
         if (i != j)
@@ -189,13 +189,14 @@ function render(scene::Scene,
                 width::Integer=100,
                 height::Integer=100,
                 fov::Real=30.0,
-                trc=trc)
+                trc=trc,
+                ImgT::T = Real) where T
   inv_width = 1 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1 / height
   aspect_ratio = width / height
 
-  image = zeros(width, height, 3)
+  image = Array{ImgT}(width, height, 3)
   for y = 1:height, x = 1:width
     xx = (2 * ((x + 0.5) * inv_width) - 1) * angle * aspect_ratio
     yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
