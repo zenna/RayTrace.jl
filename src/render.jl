@@ -72,11 +72,12 @@ function sceneintersect(r::Ray{T}, scene::ListScene) where T
       end
     end
   end
-  if hit
-    return sphere, tnear
-  else
-    return nothing, tnear
-  end
+  return hit, sphere, tnear
+  # if hit
+  #   return sphere, tnear
+  # else
+  #   return nothing, tnear
+  # end
 end
 
 "Position where ray hits object"
@@ -138,11 +139,11 @@ function trc(r::Ray,
              depth::Integer,
              background::Vec3= Float64[2.0, 2.0, 2.0],
              bias = 1e-4)
-  geom, tnear = sceneintersect(r, scene) # FIXME Type instability
-  hitpos = hitposition(r, tnear)
-  if geom == nothing
+  didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  if !didhit
     return background
   else
+    hitpos = hitposition(r, tnear)
     # return Vec3([0.5, 0.5, 0.5])
     nhit = normal(hitpos, geom, tnear)
     # If the normal and the view direction are not opposite to each other
