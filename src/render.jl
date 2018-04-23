@@ -1,7 +1,7 @@
 "Light ray with origin `orig` and direction `dir`"
-struct Ray
-  orig::Vec3
-  dir::Vec3
+struct Ray{T}
+  orig::Vec3{T}
+  dir::Vec3{T}
 end
 
 "Linear interpolation between `a` and `b` by factor `mix`"
@@ -27,7 +27,7 @@ mutable struct Intersection{T}
 end
 
 "Intersection information between ray `r` and sphere `s`"
-function rayintersect(r::Ray, s::Sphere{T})::Intersection where T
+function rayintersect(r::Ray{T}, s::Sphere{T})::Intersection where T
   l = s.center - r.orig
   tca = dot_(l, r.dir)
   radius2 = s.radius^2
@@ -48,8 +48,8 @@ function rayintersect(r::Ray, s::Sphere{T})::Intersection where T
 end
 
 "`x`, where `x ∈ scene` and "
-function sceneintersect(r::Ray, scene::ListScene)
-  tnear = Inf # closest intersection point, FIXME: Type stability
+function sceneintersect(r::Ray{T}, scene::ListScene) where T
+  tnear = typemax(T) # closest intersection point, FIXME: Type stability
   areintersections = false
 
   # Determine whether this ray hits any of the spheres, and if so, which one
@@ -57,12 +57,12 @@ function sceneintersect(r::Ray, scene::ListScene)
   sphere = first(scene) # 1 is arbitrary
   for (i, target_sphere) in enumerate(scene)
     # FIXME: Get rid of these constants
-    t0 = Inf
-    t1 = Inf
+    t0 = typemax(T)
+    t1 = typemax(T)
     r
     inter = rayintersect(r, target_sphere)
-    if inter.doesintersect > 0
-      if inter.t0 < 0
+    if inter.doesintersect > zero(T)
+      if inter.t0 < zero(T)
         inter.t0 = t1
       end
       if inter.t0 < tnear
@@ -90,7 +90,7 @@ end
 
 "Light contribution from all objects in scene"
 function light(scene::Scene, geom::Geometry, hitpos::Vec3, nhit::Vec3, bias = 1e-4)
-  surface_color_ = Vec3([0.0, 0.0, 0.0])
+  surface_color_ = Float64[0.0, 0.0, 0.0]
   for i = 1:length(scene)
     if scene[i].emission_color[1] > 0.0 # scene[i] is a light
       transmission = 1.0
@@ -119,7 +119,7 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 function trcdepth(r::Ray,
                   scene::Scene,
                   depth::Integer,
-                  background::Vec3=Vec3([2.0, 2.0, 2.0]),
+                  background::Vec3 = Float64[2.0, 2.0, 2.0],
                   bias = 1e-4)
   geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   hitpos = hitposition(r, tnear)
@@ -136,7 +136,7 @@ end
 function trc(r::Ray,
              scene::Scene,
              depth::Integer,
-             background::Vec3=Vec3([2.0, 2.0, 2.0]),
+             background::Vec3= Float64[2.0, 2.0, 2.0],
              bias = 1e-4)
   geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   hitpos = hitposition(r, tnear)
@@ -190,47 +190,21 @@ function render(scene::Scene,
                 height::Integer=100,
                 fov::Real=30.0,
                 trc=trc)
-  inv_width = 1 / width
+  inv_width = 1.0 / width
   angle = tan(pi * 0.5 * fov / 100.0)
-  inv_height = 1 / height
+  inv_height = 1.0 / height
   aspect_ratio = width / height
 
   image = zeros(width, height, 3)
-  for y = 1:height, x = 1:width
-    xx = (2 * ((x + 0.5) * inv_width) - 1) * angle * aspect_ratio
-    yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
-    minus1 = -1.0
-    raydir = simplenormalize(Vec3([xx, yy, -1.0]))
-    pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), scene, 0)
-    image[x, y, :] = pixel
+  for y = 1:height
+    for x = 1:width
+      xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
+      yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
+      minus1 = -1.0
+      raydir = simplenormalize(Float64[xx, yy, -1.0])
+      pixel = trc(Ray(Float64[0.0, 0.0, 0.0], raydir), scene, 0)
+      image[x, y, :] = pixel
+    end
   end
   image
-end
-
-"Generate ray dirs and ray origins"
-function rdirs_rorigs(width::Integer=200,
-                      height::Integer=200,
-                      fov::Real=30.0)
-  inv_width = 1 / width
-  angle = tan(pi * 0.5 * fov / 100.0)
-  inv_height = 1 / height
-  aspect_ratio = width / height
-
-  image = zeros(width, height, 3)
-  rdirs = Array{Float64}(width * height, 3)
-  rorigs = Array{Float64}(width * height, 3)
-  j = 1
-  for y = 1:height, x = 1:width
-    xx = (2 * ((x + 0.5) * inv_width) - 1) * angle * aspect_ratio
-    yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
-    minus1 = -1.0
-    raydir = simplenormalize(Vec3([xx, yy, -1.0]))
-    rorig = Vec3([0.0, 0.0, 0.0])
-    rdirs[j, :] = raydir
-    rorigs[j, :] = rorig
-    # pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), spheres, 0)
-    # image[x, y, :] = pixel
-    j += 1
-  end
-  rdirs, rorigs
 end
