@@ -27,7 +27,7 @@ mutable struct Intersection{T}
 end
 
 "Intersection information between ray `r` and sphere `s`"
-function rayintersect(r::Ray{T}, s::Sphere{T})::Intersection where T
+function rayintersect(r::Ray{T}, s::Sphere{T}) where T
   l = s.center - r.orig
   tca = dot_(l, r.dir)
   radius2 = s.radius^2
@@ -59,7 +59,6 @@ function sceneintersect(r::Ray{T}, scene::ListScene) where T
     # FIXME: Get rid of these constants
     t0 = typemax(T)
     t1 = typemax(T)
-    r
     inter = rayintersect(r, target_sphere)
     if inter.doesintersect > zero(T)
       if inter.t0 < zero(T)
@@ -122,23 +121,21 @@ function trcdepth(r::Ray,
                   depth::Integer,
                   background::Vec3 = Float64[2.0, 2.0, 2.0],
                   bias = 1e-4)
-  geom, tnear = sceneintersect(r, scene) # FIXME Type instability
-  hitpos = hitposition(r, tnear)
-  if geom == nothing
+  didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  if !didhit
     return background
   else
-    # @show sigtnear = sigmoid(tnear, k=0.001 )
     sigtnear = 0.5
-    Vec3([sigtnear, sigtnear, sigtnear])
+    Float64[sigtnear, sigtnear, sigtnear]
   end
 end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
-function trc(r::Ray,
-             scene::Scene,
-             depth::Integer,
-             background::Vec3= Float64[2.0, 2.0, 2.0],
-             bias = 1e-4)
+function fresneltrc(r::Ray,
+                    scene::Scene,
+                    depth::Integer,
+                    background::Vec3= Float64[2.0, 2.0, 2.0],
+                    bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   if !didhit
     return background
@@ -186,11 +183,11 @@ function trc(r::Ray,
 end
 
 "Render `scene` to image of given `width` and `height`"
-function render(scene::Scene,
+function render(scene::Scene;
                 width::Integer=100,
                 height::Integer=100,
                 fov::Real=30.0,
-                trc=trc)
+                trc=fresneltrc)
   inv_width = 1.0 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1.0 / height
