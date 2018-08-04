@@ -78,8 +78,6 @@ end
 "Position where ray hits object"
 hitposition(r::Ray, tnear) = r.orig + r.dir * tnear 
 
-using ZenUtils
-
 "Normal between `r` and `sphere`"
 function normal(hitpos, sphere::Sphere, tnear::Real)
   nhit = hitpos .- center(sphere)
