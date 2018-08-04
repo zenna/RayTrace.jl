@@ -125,15 +125,15 @@ function trcdepth(r::Ray,
                   scene::Scene,
                   depth::Integer,
                   background = Float64[2.0, 2.0, 2.0],
-                  bias = 1e-4)
-  geom, tnear = sceneintersect(r, scene) # FIXME Type instability
-  hitpos = hitposition(r, tnear)
-  if geom == nothing
+                  bias = 1e-4,
+                  sigtnear = 0.0)
+  didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  # hitpos = hitposition(r, tnear)
+  if !didhit
     return background
   else
     # @show sigtnear = sigmoid(tnear, k=0.001 )
-    sigtnear = 0.5
-    Vec3([sigtnear, sigtnear, sigtnear])
+    Float64[sigtnear, sigtnear, sigtnear]
   end
 end
 
