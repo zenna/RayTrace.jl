@@ -55,7 +55,7 @@ function sceneintersect(r::Ray, scene::ListScene)
   # Determine whether this ray hits any of the spheres, and if so, which one
   hit = false
   sphere = first(scene) # 1 is arbitrary
-  for (i, target_sphere) in enumerate(scene)
+  for (i, target_sphere) in enumerate(scene.geoms)
     # FIXME: Get rid of these constants
     t0 = Inf
     t1 = Inf
@@ -174,7 +174,7 @@ function fresneltrc(r::Ray,
       # reflection direction (already normalized)
       refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
       reflray = Ray(hitpos + nhit * bias, refldir)
-      reflection_ = trc(reflray, scene, depth + 1, background)
+      reflection_ = fresneltrc(reflray, scene, depth + 1, background)
 
       # the result is a mix of reflection_ and refraction (if the sphere is transparent)
       prod = reflection_ * fresneleffect
@@ -189,10 +189,10 @@ end
 
 "Render `scene` to image of given `width` and `height`"
 function render(scene::Scene;
-                width::Integer=100,
-                height::Integer=100,
-                fov::Real=30.0,
-                trc=trc,
+                width::Integer = 100,
+                height::Integer = 100,
+                fov::Real = 30.0,
+                trc = fresneltrc,
                 image = zeros(width, height, 3))
   inv_width = 1.0 / width
   angle = tan(pi * 0.5 * fov / 100.0)
