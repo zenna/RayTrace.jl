@@ -189,9 +189,9 @@ end
 
 "Render `scene` to image of given `width` and `height`"
 function render(scene::Scene;
-                width::Integer = 100,
-                height::Integer = 100,
-                fov::Real = 30.0,
+                width::Int = 100,
+                height::Int = 100,
+                fov::Float64 = 30.0,
                 trc = fresneltrc,
                 image = zeros(width, height, 3))
   inv_width = 1.0 / width
