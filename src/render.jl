@@ -1,7 +1,7 @@
 "Light ray with origin `orig` and direction `dir`"
-struct Ray{T}
-  orig::Vec3{T}
-  dir::Vec3{T}
+struct Ray{T1, T2}
+  orig::T1
+  dir::T2
 end
 
 "Linear interpolation between `a` and `b` by factor `mix`"
@@ -14,42 +14,42 @@ dot_self(x) = dot_(x, x)
 dot_(xs, ys) = sum(xs .* ys)
 
 "normalized x: `x/norm(x)`"
-simplenormalize(x::Vector) = x / sqrt(dot_self(x))
+simplenormalize(x) = x / sqrt(dot_self(x))
 
 "x iff x > 0 else 0"
 rlu(x) = max(zero(x), x)
 
 "Result of intersection between ray and object"
-mutable struct Intersection{T}
-  doesintersect::T
-  t0::T
-  t1::T
+mutable struct Intersection{T1, T2, T3}
+  doesintersect::T1
+  t0::T2
+  t1::T3
 end
 
 "Intersection information between ray `r` and sphere `s`"
-function rayintersect(r::Ray{T}, s::Sphere{T}) where T
+function rayintersect(r::Ray, s::Sphere)
   l = s.center - r.orig
   tca = dot_(l, r.dir)
-  radius2 = s.radius^2
+  radius2 = s.radius * s.radius
 
   if tca < 0
-    return Intersection{T}(tca, zero(T), zero(T))
+    return Intersection(tca, 0.0, 0.0)
   end
 
   d2 = dot_(l, l) - tca * tca
   if d2 > radius2
-    return Intersection{T}(s.radius - d2, zero(T), zero(T))
+    return Intersection(s.radius - d2, 0.0, 0.0)
   end
 
   thc = sqrt(radius2 - d2)
   t0 = tca - thc
   t1 = tca + thc
-  Intersection{T}(radius2 - d2, t0, t1)
+  Intersection(radius2 - d2, t0, t1)
 end
 
 "`x`, where `x ∈ scene` and "
-function sceneintersect(r::Ray{T}, scene::ListScene) where T
-  tnear = typemax(T) # closest intersection point, FIXME: Type stability
+function sceneintersect(r::Ray, scene::ListScene)
+  tnear = Inf # closest intersection point, FIXME: Type stability
   areintersections = false
 
   # Determine whether this ray hits any of the spheres, and if so, which one
@@ -57,11 +57,12 @@ function sceneintersect(r::Ray{T}, scene::ListScene) where T
   sphere = first(scene) # 1 is arbitrary
   for (i, target_sphere) in enumerate(scene)
     # FIXME: Get rid of these constants
-    t0 = typemax(T)
-    t1 = typemax(T)
+    t0 = Inf
+    t1 = Inf
+    r
     inter = rayintersect(r, target_sphere)
-    if inter.doesintersect > zero(T)
-      if inter.t0 < zero(T)
+    if inter.doesintersect > 0.0
+      if inter.t0 < 0.0
         inter.t0 = t1
       end
       if inter.t0 < tnear
@@ -72,30 +73,32 @@ function sceneintersect(r::Ray{T}, scene::ListScene) where T
     end
   end
   return hit, sphere, tnear
-  # if hit
-  #   return sphere, tnear
-  # else
-  #   return nothing, tnear
-  # end
 end
 
 "Position where ray hits object"
 hitposition(r::Ray, tnear) = r.orig + r.dir * tnear 
 
 "Normal between `r` and `sphere`"
-function normal(hitpos::Vec3, sphere::Sphere, tnear::Real)
-  nhit = hitpos - center(sphere)
+function normal(hitpos, sphere::Sphere, tnear::Real)
+  nhit = hitpos .- center(sphere)
   nhit = simplenormalize(nhit)
 end
 
+# using Flux 
+# using ForwardDiff
+# function Base.:-(a::ForwardDiff.Dual{Tx, V, N}, b::Flux.Tracker.TrackedReal) where {Tx, N, V <: Real}
+#   # @assert false
+#   Flux.Tracker.track(Base.:-, a, b)
+# end
+
 "Light contribution from all objects in scene"
-function light(scene::Scene, geom::Geometry, hitpos::Vec3, nhit::Vec3, bias = 1e-4)
+function light(scene::Scene, geom::Geometry, hitpos, nhit, bias = 1e-4)
   surface_color_ = Float64[0.0, 0.0, 0.0]
   for i = 1:length(scene)
     if scene[i].emission_color[1] > 0.0 # scene[i] is a light
       transmission = 1.0
       light_dir = scene[i].center - hitpos  # FIXME: Don't have this
-      light_dir = normalize(light_dir)
+      light_dir = simplenormalize(light_dir)
 
       for j = 1:length(scene)
         if (i != j)
@@ -119,13 +122,15 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 function trcdepth(r::Ray,
                   scene::Scene,
                   depth::Integer,
-                  background::Vec3 = Float64[2.0, 2.0, 2.0],
-                  bias = 1e-4)
+                  background = Float64[2.0, 2.0, 2.0],
+                  bias = 1e-4,
+                  sigtnear = 0.0)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  # hitpos = hitposition(r, tnear)
   if !didhit
     return background
   else
-    sigtnear = 0.5
+    # @show sigtnear = sigmoid(tnear, k=0.001 )
     Float64[sigtnear, sigtnear, sigtnear]
   end
 end
@@ -187,13 +192,13 @@ function render(scene::Scene;
                 width::Integer=100,
                 height::Integer=100,
                 fov::Real=30.0,
-                trc=fresneltrc)
+                trc=trc,
+                image = zeros(width, height, 3))
   inv_width = 1.0 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1.0 / height
   aspect_ratio = width / height
-
-  image = zeros(width, height, 3)
+ 
   for y = 1:height
     for x = 1:width
       xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
@@ -205,4 +210,32 @@ function render(scene::Scene;
     end
   end
   image
+end
+
+"Generate ray dirs and ray origins"
+function rdirs_rorigs(width::Integer=200,
+                      height::Integer=200,
+                      fov::Real=30.0)
+  inv_width = 1 / width
+  angle = tan(pi * 0.5 * fov / 100.0)
+  inv_height = 1 / height
+  aspect_ratio = width / height
+
+  image = zeros(width, height, 3)
+  rdirs = Array{Float64}(width * height, 3)
+  rorigs = Array{Float64}(width * height, 3)
+  j = 1
+  for y = 1:height, x = 1:width
+    xx = (2 * ((x + 0.5) * inv_width) - 1) * angle * aspect_ratio
+    yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
+    minus1 = -1.0
+    raydir = simplenormalize(Vec3([xx, yy, -1.0]))
+    rorig = Vec3([0.0, 0.0, 0.0])
+    rdirs[j, :] = raydir
+    rorigs[j, :] = rorig
+    # pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), spheres, 0)
+    # image[x, y, :] = pixel
+    j += 1
+  end
+  rdirs, rorigs
 end
