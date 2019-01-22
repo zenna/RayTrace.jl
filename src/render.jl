@@ -122,7 +122,7 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 function trcdepth(r::Ray,
                   scene::Scene,
                   depth::Integer,
-                  background = Float64[2.0, 2.0, 2.0],
+                  background = Float64[1.0, 1.0, 1.0],
                   bias = 1e-4,
                   sigtnear = 0.0)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
@@ -222,8 +222,8 @@ function rdirs_rorigs(width::Integer=200,
   aspect_ratio = width / height
 
   image = zeros(width, height, 3)
-  rdirs = Array{Float64}(width * height, 3)
-  rorigs = Array{Float64}(width * height, 3)
+  rdirs = Array{Float64}(undef, width * height, 3)
+  rorigs = Array{Float64}(undef, width * height, 3)
   j = 1
   for y = 1:height, x = 1:width
     xx = (2 * ((x + 0.5) * inv_width) - 1) * angle * aspect_ratio
