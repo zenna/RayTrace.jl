@@ -138,8 +138,8 @@ end
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function fresneltrc(r::Ray,
                     scene::Scene,
-                    depth::Integer,
-                    background::Vec3= Float64[2.0, 2.0, 2.0],
+                    depth::Integer = 0,
+                    background::Vec3 = Float64[2.0, 2.0, 2.0],
                     bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   if !didhit
@@ -205,7 +205,7 @@ function render(scene::Scene;
       yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
       minus1 = -1.0
       raydir = simplenormalize(Float64[xx, yy, -1.0])
-      pixel = trc(Ray(Float64[0.0, 0.0, 0.0], raydir), scene, 0)
+      pixel = trc(Ray(Float64[0.0, 0.0, 0.0], raydir), scene)
       image[x, y, :] = pixel
     end
   end
