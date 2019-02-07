@@ -122,7 +122,7 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 function trcdepth(r::Ray,
                   scene::Scene,
                   depth::Integer,
-                  background = Float64[2.0, 2.0, 2.0],
+                  background = Float64[1.0, 1.0, 1.0],
                   bias = 1e-4,
                   sigtnear = 0.0)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
@@ -139,7 +139,7 @@ end
 function fresneltrc(r::Ray,
                     scene::Scene,
                     depth::Integer,
-                    background::Vec3= Float64[2.0, 2.0, 2.0],
+                    background::Vec3= Float64[1.0, 1.0, 1.0],
                     bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   if !didhit
@@ -187,6 +187,70 @@ function fresneltrc(r::Ray,
   end
 end
 
+# function intersectiontrc(r::Ray,
+#                          scene::Scene,
+#                          depth;
+#                          background::Vec3 = Float64[1.0, 1.0, 1.0],
+#                          bias = 1e-4)
+#   maxobjs = 0.0
+#   total = 0.0
+#   i = 0
+#   # println("")
+#   geoms = []
+#   while true
+#     # @show i
+#     i += 1  
+#     didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+#     push!(geoms, objectid(geom))
+#     if !didhit
+#       break
+#     else
+#       maxobjs = 1.0
+#       hitpos = hitposition(r, tnear)
+#       nhit = normal(hitpos, geom, tnear)
+#       d = dot_(r.dir, nhit)
+#       inside = dot_(r.dir, nhit) > 0.0
+#       total += inside ? -1.0 : 1.0
+#       maxobjs = max(total, maxobjs)
+#       r = Ray(hitpos + r.dir * bias, r.dir)
+#       if (i >= 3) && didhit
+#         @show geoms
+#         if geoms[3] == geoms[2]
+#           @assert false
+#         end
+#       end  
+#     end
+#   end
+#   [maxobjs]
+# end
+
+function inscene(sphere::Sphere, pos)
+  sqrt(dot_self(sphere.center - pos)) < sphere.radius 
+end
+
+function inscene(scene::Scene, pos)
+  tot = 0.0
+  for geom in scene.geoms
+    tot += float(inscene(geom, pos))
+  end
+  tot
+end
+
+function intersectiontrc(r::Ray,
+                         scene::Scene,
+                         depth;
+                         tmax = 100,
+                         nsamples = 100)
+  rng = range(0.0, length = nsamples, stop = tmax)
+  maxobjs = 0.0
+  for h in rng
+    pos = hitposition(r, h)
+    maxobjs = max(maxobjs, inscene(scene, pos))
+  end
+  [maxobjs]
+end
+
+
 "Render `scene` to image of given `width` and `height`"
 function render(scene::Scene;
                 width::Int = 100,
@@ -211,6 +275,7 @@ function render(scene::Scene;
   end
   image
 end
+
 
 "Generate ray dirs and ray origins"
 function rdirs_rorigs(width::Integer=200,

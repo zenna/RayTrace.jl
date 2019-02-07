@@ -1,5 +1,5 @@
 using RayTrace
-import RayTrace: Sphere, Vec3, FancySphere
+import RayTrace: Sphere, Vec3, FancySphere, rgbimg
 using Colors
 using ImageView
 
@@ -19,19 +19,6 @@ end
 function render_example_spheres()
   scene = example_spheres()
   RayTrace.render(scene)
-end
-
-"Create an rgb image from a 3D matrix (w, h, c)"
-function rgbimg(img)
-  w = size(img)[1]
-  h = size(img)[2]
-  clrimg = Array{Colors.RGB}(w, h)
-  for i = 1:w
-    for j = 1:h
-      clrimg[i,j] = Colors.RGB(img[i,j,:]...)
-    end
-  end
-  clrimg
 end
 
 function show_img()
