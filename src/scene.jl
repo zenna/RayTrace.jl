@@ -1,7 +1,7 @@
 abstract type Scene end
 
 "Collection of geometric objects in a scene"
-struct ListScene{T <: Geometry} <: Scene
+struct ListScene{T} <: Scene
   geoms::Vector{T} # zt: This should be an abstract vector, to support static, is it even necessary?
 end
 

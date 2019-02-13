@@ -1,27 +1,34 @@
-abstract type Sphere <: Geometry end
+center(sphere::Sphere) = sphere.center
+radius(sphere::Sphere) = sphere.r
 
-struct SimpleSphere{T1, T2} <: Sphere
-  center::T1  # position of center the sphere
-  radius::T2        # radius of sphere
+u(::Type{T}) where T = Union{T, MaterialGeom{T}}
+# const US = u(Sphere) 
+
+const US{T, MAT} = Union{Sphere{T}, MaterialGeom{Sphere{T}, MAT}}
+
+"Intersection information between ray `r` and sphere `s`"
+function rayintersect(r::Ray, s::US)
+  l = s.center - r.orig
+  tca = dot_(l, r.dir)
+  radius2 = s.r * s.r
+
+  if tca < 0
+    return Intersection(tca, 0.0, 0.0)
+  end
+
+  d2 = dot_(l, l) - tca * tca
+  if d2 > radius2
+    return Intersection(s.r - d2, 0.0, 0.0)
+  end
+
+  thc = sqrt(radius2 - d2)
+  t0 = tca - thc
+  t1 = tca + thc
+  Intersection(radius2 - d2, t0, t1)
 end
 
-center(sphere::SimpleSphere) = sphere.center
-radius(sphere::SimpleSphere) = sphere.center
-
-struct FancySphere{TC, TR, TSC, TRF, TRA, TE} <: Sphere
-  center::TC  # position of center the sphere
-  radius::TR      # radius of sphere
-  surface_color::TSC  # color of surface
-  reflection::TRF
-  transparency::TRA
-  emission_color::TE
+"Normal between `r` and `sphere`"
+function normal(hitpos, s::US, tnear::Real)
+  nhit = hitpos .- s.center
+  nhit = simplenormalize(nhit)
 end
-
-# Can remove in julia 0.7 with .dot overloading
-center(sphere::FancySphere) = sphere.center
-radius(sphere::FancySphere) = sphere.radius
-surface_color(sphere::FancySphere) = sphere.surface_color
-reflection(sphere::FancySphere) = sphere.reflection
-transparency(sphere::FancySphere) = sphere.transparency
-emission_color(sphere::FancySphere) = sphere.emission_color
-

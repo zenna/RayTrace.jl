@@ -12,3 +12,5 @@ function rgbimg(img)
   end
   clrimg
 end
+
+rgb(pixel) = Colors.RGB(p[1], p[2], p[3])

@@ -1,9 +1,3 @@
-"Light ray with origin `orig` and direction `dir`"
-struct Ray{T1, T2}
-  orig::T1
-  dir::T2
-end
-
 "Linear interpolation between `a` and `b` by factor `mix`"
 mix(a, b, mix::Real) = b * mix + a * (1 - mix)
 
@@ -18,34 +12,6 @@ simplenormalize(x) = x / sqrt(dot_self(x))
 
 "x iff x > 0 else 0"
 rlu(x) = max(zero(x), x)
-
-"Result of intersection between ray and object"
-mutable struct Intersection{T1, T2, T3}
-  doesintersect::T1
-  t0::T2
-  t1::T3
-end
-
-"Intersection information between ray `r` and sphere `s`"
-function rayintersect(r::Ray, s::Sphere)
-  l = s.center - r.orig
-  tca = dot_(l, r.dir)
-  radius2 = s.radius * s.radius
-
-  if tca < 0
-    return Intersection(tca, 0.0, 0.0)
-  end
-
-  d2 = dot_(l, l) - tca * tca
-  if d2 > radius2
-    return Intersection(s.radius - d2, 0.0, 0.0)
-  end
-
-  thc = sqrt(radius2 - d2)
-  t0 = tca - thc
-  t1 = tca + thc
-  Intersection(radius2 - d2, t0, t1)
-end
 
 "`x`, where `x ∈ scene` and "
 function sceneintersect(r::Ray, scene::ListScene)
@@ -78,11 +44,7 @@ end
 "Position where ray hits object"
 hitposition(r::Ray, tnear) = r.orig + r.dir * tnear 
 
-"Normal between `r` and `sphere`"
-function normal(hitpos, sphere::Sphere, tnear::Real)
-  nhit = hitpos .- center(sphere)
-  nhit = simplenormalize(nhit)
-end
+
 
 # using Flux 
 # using ForwardDiff
@@ -92,10 +54,10 @@ end
 # end
 
 "Light contribution from all objects in scene"
-function light(scene::Scene, geom::Geometry, hitpos, nhit, bias = 1e-4)
-  surface_color_ = Float64[0.0, 0.0, 0.0]
+function light(scene::Scene, geom, hitpos, nhit, bias = 1e-4)
+  surface_color_ = Vec3(0.0, 0.0, 0.0)
   for i = 1:length(scene)
-    if scene[i].emission_color[1] > 0.0 # scene[i] is a light
+    if emission_color(scene[i])[1] > 0.0 # scene[i] is a light
       transmission = 1.0
       light_dir = scene[i].center - hitpos  # FIXME: Don't have this
       light_dir = simplenormalize(light_dir)
@@ -110,7 +72,7 @@ function light(scene::Scene, geom::Geometry, hitpos, nhit, bias = 1e-4)
         end
       end
       lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
-      surface_color_ += map(*, lhs, scene[i].emission_color)
+      surface_color_ += map(*, lhs, emission_color(scene[i]))
     end
   end
   surface_color_
@@ -122,7 +84,7 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 function trcdepth(r::Ray,
                   scene::Scene,
                   depth::Integer,
-                  background = Float64[1.0, 1.0, 1.0],
+                  background = Vec3(1.0, 1.0, 1.0),
                   bias = 1e-4,
                   sigtnear = 0.0)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
@@ -131,15 +93,15 @@ function trcdepth(r::Ray,
     return background
   else
     # @show sigtnear = sigmoid(tnear, k=0.001 )
-    Float64[sigtnear, sigtnear, sigtnear]
+    Vec3(sigtnear, sigtnear, sigtnear)
   end
 end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function fresneltrc(r::Ray,
                     scene::Scene,
-                    depth::Integer,
-                    background::Vec3= Float64[1.0, 1.0, 1.0],
+                    depth::Integer = 0,
+                    background::Vec3 = Vec3(1.0, 1.0, 1.0),
                     bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   if !didhit
@@ -251,13 +213,13 @@ function intersectiontrc(r::Ray,
 end
 
 
-"Render `scene` to image of given `width` and `height`"
+"$(SIGNATURES) Render `scene` to image of given `width` and `height`"
 function render(scene::Scene;
-                width::Int = 100,
-                height::Int = 100,
-                fov::Float64 = 30.0,
+                width = 100,
+                height = 100,
+                fov = 30.0,
                 trc = fresneltrc,
-                image = zeros(width, height, 3))
+                image = Array{Vec3{Float64}}(undef, width, height))
   inv_width = 1.0 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1.0 / height
@@ -268,9 +230,9 @@ function render(scene::Scene;
       xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
       yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
       minus1 = -1.0
-      raydir = simplenormalize(Float64[xx, yy, -1.0])
-      pixel = trc(Ray(Float64[0.0, 0.0, 0.0], raydir), scene, 0)
-      image[x, y, :] = pixel
+      raydir = normalize(Vec3(xx, yy, -1.0))
+      pixel = trc(Ray(Point(0.0, 0.0, 0.0), raydir), scene)
+      @inbounds image[x, y] = pixel
     end
   end
   image
@@ -278,17 +240,17 @@ end
 
 
 "Generate ray dirs and ray origins"
-function rdirs_rorigs(width::Integer=200,
-                      height::Integer=200,
-                      fov::Real=30.0)
+function rdirs_rorigs(width = 200,
+                      height = 200,
+                      fov = 30.0)
   inv_width = 1 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1 / height
   aspect_ratio = width / height
 
   image = zeros(width, height, 3)
-  rdirs = Array{Float64}(width * height, 3)
-  rorigs = Array{Float64}(width * height, 3)
+  rdirs = Array{Float64}(undef, width * height, 3)
+  rorigs = Array{Float64}(undef, width * height, 3)
   j = 1
   for y = 1:height, x = 1:width
     xx = (2 * ((x + 0.5) * inv_width) - 1) * angle * aspect_ratio
