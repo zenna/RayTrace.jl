@@ -13,4 +13,4 @@ function rgbimg(img)
   clrimg
 end
 
-rgb(pixel) = Colors.RGB(p[1], p[2], p[3])
+rgb(p) = Colors.RGB(p[1], p[2], p[3])

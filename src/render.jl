@@ -200,7 +200,6 @@ end
 
 function intersectiontrc(r::Ray,
                          scene::Scene,
-                         depth;
                          tmax = 100,
                          nsamples = 100)
   rng = range(0.0, length = nsamples, stop = tmax)
@@ -209,7 +208,7 @@ function intersectiontrc(r::Ray,
     pos = hitposition(r, h)
     maxobjs = max(maxobjs, inscene(scene, pos))
   end
-  [maxobjs]
+  maxobjs
 end
 
 
@@ -229,7 +228,6 @@ function render(scene::Scene;
     for x = 1:width
       xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
       yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
-      minus1 = -1.0
       raydir = normalize(Vec3(xx, yy, -1.0))
       pixel = trc(Ray(Point(0.0, 0.0, 0.0), raydir), scene)
       @inbounds image[x, y] = pixel
