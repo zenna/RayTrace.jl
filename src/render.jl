@@ -83,17 +83,17 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function trcdepth(r::Ray,
                   scene::Scene,
-                  depth::Integer,
-                  background = Vec3(1.0, 1.0, 1.0),
+                  background = 1.0,
                   bias = 1e-4,
                   sigtnear = 0.0)
-  didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  # didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  sc = sceneintersect(r, scene)
   # hitpos = hitposition(r, tnear)
-  if !didhit
+  if !(sc[1])
     return background
   else
-    # @show sigtnear = sigmoid(tnear, k=0.001 )
-    Vec3(sigtnear, sigtnear, sigtnear)
+    # 0.3
+    sc[3]
   end
 end
 
@@ -236,6 +236,30 @@ function render(scene::Scene;
   image
 end
 
+function renderpixel(scene, i, width, inv_width, inv_height, angle, aspect_ratio, trc)
+  x_, y_ = divrem(i, width)
+  x = x_ + 1
+  y = y_ + 1
+  xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
+  yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
+  # raydir = normalize(Vec3(xx, yy, -1.0))
+  raydir = Vec3(xx, yy, -1.0)
+  trc(Ray(Point(0.0, 0.0, 0.0), raydir), scene)
+end
+
+"$(SIGNATURES) Render `scene` to image of given `width` and `height`"
+function renderfunc(scene::Scene;
+                    width = 100,
+                    height = 100,
+                    fov = 30.0,
+                    trc = fresneltrc)
+  inv_width = 1.0 / width
+  angle = tan(pi * 0.5 * fov / 100.0)
+  inv_height = 1.0 / height
+  aspect_ratio = width / height
+  pixels = [renderpixel(scene, i, width, inv_width, inv_height, angle, aspect_ratio, trc) for i = 1:(height * width)]
+  reshape(pixels, width, height)
+end
 
 "Generate ray dirs and ray origins"
 function rdirs_rorigs(width = 200,
