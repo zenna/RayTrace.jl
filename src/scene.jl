@@ -11,4 +11,4 @@ Base.size(scene::ListScene) = size(scene.geoms)
 Base.length(scene::ListScene) = length(scene.geoms)
  
 "Add `geom` to `scene`"
-Base.push!(scene::ListScene, geom::Geometry) = push!(scene.geom, geom) 
+Base.push!(scene::ListScene, geom::Geometry) = push!(scene.geom, geom)

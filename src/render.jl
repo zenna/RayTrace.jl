@@ -8,13 +8,21 @@ dot_self(x) = dot_(x, x)
 dot_(xs, ys) = sum(xs .* ys)
 
 "normalized x: `x/norm(x)`"
-simplenormalize(x) = x / sqrt(dot_self(x))
+# simplenormalize(x) =  sqrt.(dot_self(x))
+
+# norm(x) = sqrt(dot(x, x))
+
+# simplenormalize(x) =  x ./ norm(x)
+
+# simplenormalize(x) =  x + 10
+
+simplenormalize(x) = x
 
 "x iff x > 0 else 0"
 rlu(x) = max(zero(x), x)
 
 "`x`, where `x ∈ scene` and "
-function sceneintersect(r::Ray, scene::ListScene)
+function sceneintersect(r::Ray, scene)
   tnear = Inf # closest intersection point, FIXME: Type stability
   areintersections = false
 
@@ -43,15 +51,6 @@ end
 
 "Position where ray hits object"
 hitposition(r::Ray, tnear) = r.orig + r.dir * tnear 
-
-
-
-# using Flux 
-# using ForwardDiff
-# function Base.:-(a::ForwardDiff.Dual{Tx, V, N}, b::Flux.Tracker.TrackedReal) where {Tx, N, V <: Real}
-#   # @assert false
-#   Flux.Tracker.track(Base.:-, a, b)
-# end
 
 "Light contribution from all objects in scene"
 function light(scene::Scene, geom, hitpos, nhit, bias = 1e-4)
@@ -149,142 +148,82 @@ function fresneltrc(r::Ray,
   end
 end
 
-# function intersectiontrc(r::Ray,
-#                          scene::Scene,
-#                          depth;
-#                          background::Vec3 = Float64[1.0, 1.0, 1.0],
-#                          bias = 1e-4)
-#   maxobjs = 0.0
-#   total = 0.0
-#   i = 0
-#   # println("")
-#   geoms = []
-#   while true
-#     # @show i
-#     i += 1  
-#     didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
-#     push!(geoms, objectid(geom))
-#     if !didhit
-#       break
-#     else
-#       maxobjs = 1.0
-#       hitpos = hitposition(r, tnear)
-#       nhit = normal(hitpos, geom, tnear)
-#       d = dot_(r.dir, nhit)
-#       inside = dot_(r.dir, nhit) > 0.0
-#       total += inside ? -1.0 : 1.0
-#       maxobjs = max(total, maxobjs)
-#       r = Ray(hitpos + r.dir * bias, r.dir)
-#       if (i >= 3) && didhit
-#         @show geoms
-#         if geoms[3] == geoms[2]
-#           @assert false
-#         end
-#       end  
-#     end
-#   end
-#   [maxobjs]
-# end
-
-function inscene(sphere::Sphere, pos)
-  sqrt(dot_self(sphere.center - pos)) < sphere.radius 
-end
-
-function inscene(scene::Scene, pos)
-  tot = 0.0
-  for geom in scene.geoms
-    tot += float(inscene(geom, pos))
-  end
-  tot
-end
-
-function intersectiontrc(r::Ray,
-                         scene::Scene,
-                         tmax = 100,
-                         nsamples = 100)
-  rng = range(0.0, length = nsamples, stop = tmax)
-  maxobjs = 0.0
-  for h in rng
-    pos = hitposition(r, h)
-    maxobjs = max(maxobjs, inscene(scene, pos))
-  end
-  maxobjs
-end
-
-
 "$(SIGNATURES) Render `scene` to image of given `width` and `height`"
 function render(scene::Scene;
                 width = 100,
                 height = 100,
                 fov = 30.0,
                 trc = fresneltrc,
-                image = Array{Vec3{Float64}}(undef, width, height))
+                image = Array{Vec3{Float64}}(undef, height, width))
   inv_width = 1.0 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1.0 / height
   aspect_ratio = width / height
  
-  for y = 1:height
-    for x = 1:width
+  for x = 1:width
+    for y = 1:height
       xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
       yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
       raydir = normalize(Vec3(xx, yy, -1.0))
       pixel = trc(Ray(Point(0.0, 0.0, 0.0), raydir), scene)
-      @inbounds image[x, y] = pixel
+      @inbounds image[y, x] = pixel
     end
   end
   image
 end
 
-function renderpixel(scene, i, width, inv_width, inv_height, angle, aspect_ratio, trc)
-  x_, y_ = divrem(i, width)
-  x = x_ + 1
-  y = y_ + 1
+function renderpixel(scene, ci, rorig, width, inv_width, inv_height, angle, aspect_ratio, trc)
+  y = ci[1]
+  x = ci[2]
+  # Convert from raster coords to NDC and hten to screen coords
   xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
   yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
-  # raydir = normalize(Vec3(xx, yy, -1.0))
   raydir = Vec3(xx, yy, -1.0)
-  trc(Ray(Point(0.0, 0.0, 0.0), raydir), scene)
+  raydir = simplenormalize(raydir)
+  trc(Ray(rorig, raydir), scene)
 end
+
+# "Pixel coordinates in NDC space (Normalized Device Coordinates):"
+# function pixelndx(x, y, inv_height, inv_width)
+#   # By convention film plane is 1 unit from cameras origin
+#   xndc = x + 0.5 * inv_width
+#   yndc = y + 0.5 * inv_height
+# end
+
+# function 
 
 "$(SIGNATURES) Render `scene` to image of given `width` and `height`"
 function renderfunc(scene::Scene;
                     width = 100,
                     height = 100,
                     fov = 30.0,
+                    rorig = Point(0.0, 0.0, 0.0),
                     trc = fresneltrc)
   inv_width = 1.0 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1.0 / height
   aspect_ratio = width / height
-  pixels = [renderpixel(scene, i, width, inv_width, inv_height, angle, aspect_ratio, trc) for i = 1:(height * width)]
-  reshape(pixels, width, height)
+  pixels = map(ci -> renderpixel(scene, ci, rorig, width, inv_width, inv_height,
+                                 angle, aspect_ratio, trc),
+               CartesianIndices((height, width)))
+  reshape(pixels, height, width )
 end
 
-"Generate ray dirs and ray origins"
-function rdirs_rorigs(width = 200,
-                      height = 200,
-                      fov = 30.0)
+"Generate ray dirs from origin"
+function rdirs(width = 200, height = 200, fov = 30.0)
+  image = Array{Vec3{Float64}}(undef, height, width)
+
   inv_width = 1 / width
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1 / height
   aspect_ratio = width / height
-
-  image = zeros(width, height, 3)
-  rdirs = Array{Float64}(undef, width * height, 3)
-  rorigs = Array{Float64}(undef, width * height, 3)
-  j = 1
-  for y = 1:height, x = 1:width
-    xx = (2 * ((x + 0.5) * inv_width) - 1) * angle * aspect_ratio
-    yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
-    minus1 = -1.0
-    raydir = simplenormalize(Vec3([xx, yy, -1.0]))
-    rorig = Vec3([0.0, 0.0, 0.0])
-    rdirs[j, :] = raydir
-    rorigs[j, :] = rorig
-    # pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), spheres, 0)
-    # image[x, y, :] = pixel
-    j += 1
+  for x = 1:width
+    for y = 1:height
+      xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
+      yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
+      raydir = normalize(Vec3(xx, yy, -1.0))
+      @inbounds image[y, x] = raydir
+    end
   end
-  rdirs, rorigs
+  image
 end
