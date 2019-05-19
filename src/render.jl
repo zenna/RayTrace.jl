@@ -10,13 +10,19 @@ dot_(xs, ys) = sum(xs .* ys)
 "normalized x: `x/norm(x)`"
 # simplenormalize(x) =  sqrt.(dot_self(x))
 
-# norm(x) = sqrt(dot(x, x))
+# norm(x) = sqrt(dot (x, x))
+norm(x) = sqrt(x[1] * x[1] + x[2] * x[2] + x[3] * x[3])
 
-# simplenormalize(x) =  x ./ norm(x)
+# simplenormalize(x) =  x ./ nor  m(x)
+
+function simplenormalize(x)
+  n = norm(x)
+  Vec3(x[1]/n, x[2]/n, x[3]/n)
+end
 
 # simplenormalize(x) =  x + 10
 
-simplenormalize(x) = x
+# simplenormalize(x) = x
 
 "x iff x > 0 else 0"
 rlu(x) = max(zero(x), x)
@@ -82,7 +88,7 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function trcdepth(r::Ray,
                   scene::Scene,
-                  background = 1.0,
+                  background = 100.0,
                   bias = 1e-4,
                   sigtnear = 0.0)
   # didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
