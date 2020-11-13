@@ -136,6 +136,25 @@ function trcdepth(r::Ray,
 end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
+function trcdepthx(r::Ray,
+                  scene::Scene,
+                  depth::Integer,
+                  background = 1.0,
+                  bias = 1e-4,
+                  sigtnear = 0.0)
+  3.0
+  # didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
+  # # hitpos = hitposition(r, tnear)
+  # if !didhit
+  #   return background
+  # else
+  #   sigtnear
+  #   # # @show sigtnear = sigmoid(tnear, k=0.001 )
+  #   # Float64[sigtnear, sigtnear, sigtnear]
+  # end
+end
+
+"Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function fresneltrc(r::Ray,
                     scene::Scene,
                     depth::Integer,
@@ -185,6 +204,50 @@ function fresneltrc(r::Ray,
     end
     surface_color_ + emission_color(geom)
   end
+end
+
+"Render `scene` to image of given `width` and `height`"
+function renderx(scene::Scene,
+                image;
+                width::Int = 100,
+                height::Int = 100,
+                fov::Float64 = 30.0,
+                trc = trcdepthx)
+  inv_width = 1.0 / width
+  angle = tan(pi * 0.5 * fov / 100.0)
+  inv_height = 1.0 / height
+  aspect_ratio = width / height
+  g(1,2, inv_width, inv_height, angle, aspect_ratio, trc, scene)
+  # g(x)
+  # f(x, y, xs...) = x * y
+  # # q(x, y) = x * y
+  # map((x,y) -> f(x,y, inv_width, inv_height, angle, aspect_ratio, trc, scene), 1:width, 1:height)
+  # [g(x,y, inv_width, inv_height, angle, aspect_ratio, trc, scene) for x = 1:width, y = 1:height] 
+  # for y = 1:height
+  #   for x = 1:width
+  #     xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
+  #     yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
+  #     minus1 = -1.0
+  #     raydir = simplenormalize(Float64[xx, yy, -1.0])
+  #     pixel = trc(Ray(Float64[0.0, 0.0, 0.0], raydir), scene, 0)
+  #     image[x, y, :] = pixel
+  #   end
+  # end
+  # image
+end
+
+function h(x, y, inv_width, inv_height, angle, aspect_ratio, trc, scene)
+  return 3.0
+end
+
+
+function g(x, y, inv_width, inv_height, angle, aspect_ratio, trc, scene)
+  # return 3.0
+  xx = (2 * ((x + 0.5) * inv_width) - 1.0) * angle * aspect_ratio
+  yy = (1 - 2 * ((y + 0.5) * inv_height)) * angle
+  minus1 = -1.0
+  raydir = simplenormalize((xx, yy, -1.0))
+  pixel = trc(Ray((0.0, 0.0, 0.0), raydir), scene, 0)
 end
 
 "Render `scene` to image of given `width` and `height`"
