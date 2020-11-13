@@ -25,7 +25,7 @@ end
 function rgbimg(img)
   w = size(img)[1]
   h = size(img)[2]
-  clrimg = Array{Colors.RGB}(w, h)
+  clrimg = Array{Colors.RGB}(undef, w, h)
   for i = 1:w
     for j = 1:h
       clrimg[i,j] = Colors.RGB(img[i,j,:]...)
