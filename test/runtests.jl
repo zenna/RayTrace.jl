@@ -25,13 +25,15 @@ end
 function rgbimg(img)
   w = size(img)[1]
   h = size(img)[2]
-  clrimg = Array{Colors.RGB}(undef, w, h)
+  img = clamp.(img, 0.0, 1.0)
+  clrimg = Array{Colors.RGB{N0f8}}(undef, w, h)
   for i = 1:w
     for j = 1:h
-      clrimg[i,j] = Colors.RGB(img[i,j,:]...)
+      clrimg[i,j] = Colors.RGB{N0f8}(img[i,j,:]...)
     end
   end
   clrimg
+  # clamp.(clrimg. 0.0, 1.0)
 end
 
 function show_img()

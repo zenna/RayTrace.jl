@@ -139,7 +139,7 @@ end
 function fresneltrc(r::Ray,
                     scene::Scene,
                     depth::Integer,
-                    background::Vec3= Float64[2.0, 2.0, 2.0],
+                    background::Vec3= Float64[1.0, 1.0, 1.0],
                     bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   if !didhit
