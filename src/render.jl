@@ -40,8 +40,12 @@ function rayintersect(r::Ray, s::Sphere)
   # if d2 > radius2
   #   return Intersection(s.radius - d2, 0.0, 0.0)
   # end
-
-  return ifelse(tca < 0, Intersection(tca, 0.0, 0.0), ifelse(d2 > radius2, Intersection(s.radius - d2, 0.0, 0.0), Intersection(radius2 - d2, tca - sqrt(radius2 - d2), tca + sqrt(radius2 - d2))))
+  d2_greater() = Intersection(s.radius - d2, 0.0, 0.0)
+  d2_lesser() = begin
+    tch = sqrt(radius2 - d2)
+    Intersection(radius2 - d2, tca - tch, tca + tch)
+  end
+  return cond(tca < 0, () -> Intersection(tca, 0.0, 0.0), cond(d2 > radius2, d2_greater, d2_lesser))
 end
 
 "`x`, where `x ∈ scene` and "
@@ -84,13 +88,6 @@ function normal(hitpos, sphere::Sphere, tnear::Real)
   nhit = hitpos .- center(sphere)
   nhit = simplenormalize(nhit)
 end
-
-# using Flux 
-# using ForwardDiff
-# function Base.:-(a::ForwardDiff.Dual{Tx, V, N}, b::Flux.Tracker.TrackedReal) where {Tx, N, V <: Real}
-#   # @assert false
-#   Flux.Tracker.track(Base.:-, a, b)
-# end
 
 "Light contribution from all objects in scene"
 function light(scene::Scene, geom::Geometry, hitpos, nhit, bias = 1e-4)
@@ -212,7 +209,7 @@ function fresneltrc(r::Ray,
 
   # the result is a mix of reflection_ and refraction (if the sphere is transparent)
   prod = reflection_ * fresneleffect
-  surface_color_ = ifelse(((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1), map(*, prod, surface_color(geom)),light(scene, geom, hitpos, nhit, bias))
+  surface_color_ = cond(((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1), () -> map(*, prod, surface_color(geom)), () -> light(scene, geom, hitpos, nhit, bias))
   ifelse(!didhit, background, surface_color_ + emission_color(geom))
 end
 
