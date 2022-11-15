@@ -41,10 +41,10 @@ function rayintersect(r::Ray, s::Sphere)
   #   return Intersection(s.radius - d2, 0.0, 0.0)
   # end
 
-  thc = sqrt(radius2 - d2)
+  thc = 
   t0 = tca - thc
   t1 = tca + thc
-  return ifelse(tca < 0, Intersection(tca, 0.0, 0.0), ifelse(d2 > radius2, Intersection(s.radius - d2, 0.0, 0.0), Intersection(radius2 - d2, t0, t1)))
+  return ifelse(tca < 0, Intersection(tca, 0.0, 0.0), ifelse(d2 > radius2, Intersection(s.radius - d2, 0.0, 0.0), Intersection(radius2 - d2, tca - sqrt(radius2 - d2), tca + sqrt(radius2 - d2))))
 end
 
 "`x`, where `x ∈ scene` and "
