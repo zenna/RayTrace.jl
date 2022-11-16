@@ -45,7 +45,7 @@ function rayintersect(r::Ray, s::Sphere)
     tch = sqrt(radius2 - d2)
     Intersection(radius2 - d2, tca - tch, tca + tch)
   end
-  return cond(tca < 0, () -> Intersection(tca, 0.0, 0.0), () -> cond(d2 > radius2, d2_greater, d2_lesser))
+  return cond(tca < 0, () -> Intersection(tca, 0.0, 0.0), ifelse(d2 > radius2, d2_greater, d2_lesser))
 end
 
 "`x`, where `x ∈ scene` and "
@@ -72,7 +72,7 @@ function sceneintersect(r::Ray, scene::ListScene)
     #     hit = true
     #   end
     # end
-    inter.t0 = ifelse((inter.doesintersect > 0.0) & (inter.t0 < 0.0), t1, inter.t0)
+    inter = Intersection(inter.doesintersect, ifelse((inter.doesintersect > 0.0) & (inter.t0 < 0.0), t1, inter.t0), inter.t1)
     tnear = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), inter.t0, tnear)
     sphere = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), scene[i], sphere)
     hit = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), true, hit)
