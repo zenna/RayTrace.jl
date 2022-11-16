@@ -41,3 +41,5 @@ function show_img()
   img = rgbimg(img_)
   ImageView.imshow(img)
 end
+
+render_example_spheres()

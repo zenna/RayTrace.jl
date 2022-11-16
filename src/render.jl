@@ -45,7 +45,7 @@ function rayintersect(r::Ray, s::Sphere)
     tch = sqrt(radius2 - d2)
     Intersection(radius2 - d2, tca - tch, tca + tch)
   end
-  return cond(tca < 0, () -> Intersection(tca, 0.0, 0.0), cond(d2 > radius2, d2_greater, d2_lesser))
+  return cond(tca < 0, () -> Intersection(tca, 0.0, 0.0), () -> cond(d2 > radius2, d2_greater, d2_lesser))
 end
 
 "`x`, where `x ∈ scene` and "
@@ -75,7 +75,7 @@ function sceneintersect(r::Ray, scene::ListScene)
     inter.t0 = ifelse(inter.doesintersect > 0.0 && inter.t0 < 0.0, t1, inter.t0)
     tnear = ifelse(inter.doesintersect > 0.0 && inter.t0 < tnear, inter.t0, tnear)
     sphere = ifelse(inter.doesintersect > 0.0 && inter.t0 < tnear, scene[i], sphere)
-    sphere = ifelse(inter.doesintersect > 0.0 && inter.t0 < tnear, true, hit)
+    hit = ifelse(inter.doesintersect > 0.0 && inter.t0 < tnear, true, hit)
   end
   return hit, sphere, tnear
 end
@@ -109,8 +109,8 @@ function light(scene::Scene, geom::Geometry, hitpos, nhit, bias = 1e-4)
   #   lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
   #   surface_color_ += map(*, lhs, scene[i].emission_color)
   # end
-    transmission = ifelse(scene[i].emission_color[1] > 0.0, 1., transmission)
-    light_dir = ifelse(scene[i].emission_color[1] > 0.0, scene[i].center - hitpos, light_dir)
+    transmission = 1.
+    light_dir = scene[i].center - hitpos
     light_dir = simplenormalize(light_dir)
     for j = 1:length(scene)
       r2 = Ray(hitpos + nhit * bias, light_dir)
@@ -173,43 +173,49 @@ function fresneltrc(r::Ray,
   #   # Want blem: Data dependent branching
   #   # Want to split some of the branch and not some of the rest
   #   if ((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1)
-  #     minusrdir = r.dir * -1.0
-  #     facingratio = dot_(minusrdir, nhit)
+      # minusrdir = r.dir * -1.0
+      # facingratio = dot_(minusrdir, nhit)
 
-  #     # change the mix value to tweak the effect
-  #     fresneleffect = mix((1.0 - facingratio)^3, 1.0, 0.1)
+      # # change the mix value to tweak the effect
+      # fresneleffect = mix((1.0 - facingratio)^3, 1.0, 0.1)
 
-  #     # reflection direction (already normalized)
-  #     refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
-  #     reflray = Ray(hitpos + nhit * bias, refldir)
-  #     reflection_ = fresneltrc(reflray, scene, depth + 1, background)
+      # # reflection direction (already normalized)
+      # refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
+      # reflray = Ray(hitpos + nhit * bias, refldir)
+      # reflection_ = fresneltrc(reflray, scene, depth + 1, background)
 
-  #     # the result is a mix of reflection_ and refraction (if the sphere is transparent)
-  #     prod = reflection_ * fresneleffect
-  #     surface_color_ = map(*, prod, surface_color(geom))
+      # # the result is a mix of reflection_ and refraction (if the sphere is transparent)
+      # prod = reflection_ * fresneleffect
+      # surface_color_ = map(*, prod, surface_color(geom))
   #   else
   #     # Each light contributes to pixel colour
   #     surface_color_ = light(scene, geom, hitpos, nhit, bias)
   #   end
   #   surface_color_ + emission_color(geom)
   # end
+
+  function λt()
+    minusrdir = r.dir * -1.0
+    facingratio = dot_(minusrdir, nhit)
+
+    # change the mix value to tweak the effect
+    fresneleffect = mix((1.0 - facingratio)^3, 1.0, 0.1)
+
+    # reflection direction (already normalized)
+    refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
+    reflray = Ray(hitpos + nhit * bias, refldir)
+    reflection_ = fresneltrc(reflray, scene, depth + 1, background)
+
+    # the result is a mix of reflection_ and refraction (if the sphere is transparent)
+    prod = reflection_ * fresneleffect
+    map(*, prod, surface_color(geom))
+  end
   hitpos = hitposition(r, tnear)
   nhit = normal(hitpos, geom, tnear)
   inside = dot_(r.dir, nhit)
   nhit = ifelse(dot_(r.dir, nhit) > 0.0, -nhit, nhit)
-  minusrdir = r.dir * -1.0
-  facingratio = dot_(minusrdir, nhit)
-  # change the mix value to tweak the effect
-  fresneleffect = mix((1.0 - facingratio)^3, 1.0, 0.1)
 
-  # reflection direction (already normalized)
-  refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
-  reflray = Ray(hitpos + nhit * bias, refldir)
-  reflection_ = fresneltrc(reflray, scene, depth + 1, background)
-
-  # the result is a mix of reflection_ and refraction (if the sphere is transparent)
-  prod = reflection_ * fresneleffect
-  surface_color_ = cond(((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1), () -> map(*, prod, surface_color(geom)), () -> light(scene, geom, hitpos, nhit, bias))
+  surface_color_ = cond(((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1), λt, () -> light(scene, geom, hitpos, nhit, bias))
   ifelse(!didhit, background, surface_color_ + emission_color(geom))
 end
 

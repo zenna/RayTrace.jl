@@ -292,7 +292,7 @@ version = "0.21.3"
 
 [[Jaxy]]
 deps = ["Cassette", "PyCall", "RuntimeGeneratedFunctions"]
-git-tree-sha1 = "22f9ab324b513fec93f625c2db49d2390e118ad6"
+git-tree-sha1 = "b8f87c651d9c89e0dd39196cc3de930653631d2e"
 repo-rev = "main"
 repo-url = "/Users/archana/Documents/GitHub/Jaxy.jl"
 uuid = "b8772a9c-d893-4b49-9023-b67b6b6661a1"
