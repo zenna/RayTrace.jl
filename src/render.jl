@@ -72,10 +72,10 @@ function sceneintersect(r::Ray, scene::ListScene)
     #     hit = true
     #   end
     # end
-    inter.t0 = ifelse(inter.doesintersect > 0.0 && inter.t0 < 0.0, t1, inter.t0)
-    tnear = ifelse(inter.doesintersect > 0.0 && inter.t0 < tnear, inter.t0, tnear)
-    sphere = ifelse(inter.doesintersect > 0.0 && inter.t0 < tnear, scene[i], sphere)
-    hit = ifelse(inter.doesintersect > 0.0 && inter.t0 < tnear, true, hit)
+    inter.t0 = ifelse((inter.doesintersect > 0.0) & (inter.t0 < 0.0), t1, inter.t0)
+    tnear = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), inter.t0, tnear)
+    sphere = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), scene[i], sphere)
+    hit = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), true, hit)
   end
   return hit, sphere, tnear
 end
@@ -115,7 +115,7 @@ function light(scene::Scene, geom::Geometry, hitpos, nhit, bias = 1e-4)
     for j = 1:length(scene)
       r2 = Ray(hitpos + nhit * bias, light_dir)
       inter = rayintersect(r2, scene[j])
-      transmission = ifelse((i != j) && (inter.doesintersect > 0), 0.0, transmission)
+      transmission = ifelse((i != j) & (inter.doesintersect > 0), 0.0, transmission)
     end
     lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
     surface_color_ += map(*, lhs, scene[i].emission_color)
@@ -172,7 +172,7 @@ function fresneltrc(r::Ray,
   #   # Problem: Data dependent branching
   #   # Want blem: Data dependent branching
   #   # Want to split some of the branch and not some of the rest
-  #   if ((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1)
+  #   if ((transparency(geom) > 0.0 | reflection(geom) > 0.0) & depth < 1)
       # minusrdir = r.dir * -1.0
       # facingratio = dot_(minusrdir, nhit)
 
@@ -215,7 +215,7 @@ function fresneltrc(r::Ray,
   inside = dot_(r.dir, nhit)
   nhit = ifelse(dot_(r.dir, nhit) > 0.0, -nhit, nhit)
 
-  surface_color_ = cond(((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1), λt, () -> light(scene, geom, hitpos, nhit, bias))
+  surface_color_ = cond((((transparency(geom) > 0.0) | (reflection(geom) > 0.0)) & (depth < 1)), λt, () -> light(scene, geom, hitpos, nhit, bias))
   ifelse(!didhit, background, surface_color_ + emission_color(geom))
 end
 
