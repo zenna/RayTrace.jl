@@ -10,22 +10,22 @@ mix(a, b, mix::Real) = b * mix + a * (1 - mix)
 "norm(x)^2"
 dot_self(x) = dot_(x, x)
 
+# function map3(f, xs)
+#   [f(xs[1]), f(xs[2]), f(xs[3])]
+# end
+
+# function map3(f, xs, ys)
+#   [f(xs[1], ys[1]), f(xs[2], ys[2]), f(xs[3], ys[3])]
+# end
+
 "dot product (without BLAS etc for generality)"
-dot_(xs, ys) = sum(map3(*, xs, ys))
+dot_(xs, ys) = sum(map(*, xs, ys))
 
 "normalized x: `x/norm(x)`"
-simplenormalize(x) = (den = sqrt(dot_self(x)); map3(x -> x / den, x))
+simplenormalize(x) = (den = sqrt(dot_self(x)); x / den)
 
 "x iff x > 0 else 0"
 rlu(x) = max(0, x)
-
-function map3(f, xs)
-  [f(xs[1]), f(xs[2]), f(xs[3])]
-end
-
-function map3(f, xs, ys)
-  [f(xs[1], ys[1]), f(xs[2], ys[2]), f(xs[3], ys[3])]
-end
 
 "Result of intersection between ray and object"
 mutable struct Intersection{T1, T2, T3}
@@ -35,18 +35,20 @@ mutable struct Intersection{T1, T2, T3}
 end
 
 "Intersection information between ray `r` and sphere `s`"
-function rayintersect(r::Ray, s::Sphere)
-  l = s.center - r.orig
+function rayintersect(r::Ray, s)
+  l = map(-, s.center, r.orig)
   tca = dot_(l, r.dir)
   d2 = dot_(l, l) - tca * tca
   radius2 = s.radius * s.radius
-  d2_greater(d2, tca, r) = (r - d2, 0.0, 0.0)
-  function d2_lesser(d2, tca, r)
-    r2 = r * r
+  # d2_greater(d2, tca, r) = (r - d2, 0.0, 0.0)
+  d2_greater(d2, r) = (r - d2, 0.0, 0.0)
+  function d2_lesser(d2, tca, r2)
+    # r2 = r * r
     tch = sqrt(r2 - d2)
     (r2 - d2, tca - tch, tca + tch)
   end
-  return Intersection(ifelse(tca < 0, (tca, 0.0, 0.0), cond(d2 > radius2, d2_greater, d2_lesser, d2, tca, s.radius))...)
+  # return Intersection(ifelse(tca < 0, (tca, 0.0, 0.0), (d2 > radius2, d2_greater, d2_lesser, d2, tca, s.radius))...)
+  return Intersection(ifelse(tca < 0, (tca, 0.0, 0.0), cond(d2 > radius2, d2_greater, d2_lesser, (d2, s.radius), (d2, tca, radius2)))...)
 end
 
 "`x`, where `x ∈ scene` and "
@@ -86,7 +88,7 @@ hitposition(r::Ray, tnear) = r.orig + r.dir * tnear
 
 "Normal between `r` and `sphere`"
 function normal(hitpos, sphere, tnear)
-  nhit = map3(-, hitpos, center(sphere))
+  nhit = map(-, hitpos, center(sphere))
   # nhit = hitpos .- center(sphere)
   nhit = simplenormalize(nhit)
 end
@@ -95,32 +97,17 @@ end
 function light(scene, geom, hitpos, nhit, bias = 1e-4)
   surface_color_ = Float64[0.0, 0.0, 0.0]
   for i = 1:length(scene)
-    # if scene[i].emission_color[1] > 0.0 # scene[i] is a light
-    #   transmission = 1.0
-    #   light_dir = scene[i].center - hitpos  # FIXME: Don't have this
-    #   light_dir = simplenormalize(light_dir)
-  #   for j = 1:length(scene)
-  #     if (i != j)
-  #       r2 = Ray(hitpos + nhit * bias, light_dir)
-  #       inter = rayintersect(r2, scene[j])
-  #       if (inter.doesintersect > 0)
-  #         transmission = 0.0
-  #       end
-  #     end
-  #   end
-  #   lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
-  #   surface_color_ += map(*, lhs, scene[i].emission_color)
-  # end
     transmission = 1.
     light_dir = scene[i].center - hitpos
     light_dir = simplenormalize(light_dir)
     for j = 1:length(scene)
-      r2 = Ray(hitpos + nhit * bias, light_dir)
+      x = hitpos + nhit * bias
+      r2 = Ray(x, light_dir)
       inter = rayintersect(r2, scene[j])
       transmission = ifelse((i != j) & (inter.doesintersect > 0), 0.0, transmission)
     end
     lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
-    surface_color_ += map3(*, lhs, scene[i].emission_color)
+    surface_color_ += map(*, lhs, scene[i].emission_color)
   end
   surface_color_
 end
@@ -174,7 +161,8 @@ function fresneltrc(r::Ray,
   inside = dot_(r.dir, nhit)
   nhit = ifelse(dot_(r.dir, nhit) > 0.0, -nhit, nhit)
   p = (((transparency(geom) > 0.0) | (reflection(geom) > 0.0)) & (depth < 1))
-  surface_color_ = cond(p, λt, (scene, geom, hitpos, nhit, bias, r, background) -> light(scene, geom, hitpos, nhit, bias), scene, geom, hitpos, nhit, bias, r, background)
+  # surface_color_ = cond(p, λt, (scene, geom, hitpos, nhit, bias, r, background) -> light(scene, geom, hitpos, nhit, bias), scene, geom, hitpos, nhit, bias, r, background)
+  surface_color_ = cond(p, λt, light, (scene, geom, hitpos, nhit, bias, r, background), (scene, geom, hitpos, nhit, bias))
   ifelse(!didhit, background, surface_color_ + emission_color(geom))
 end
 
