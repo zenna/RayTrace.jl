@@ -52,7 +52,7 @@ function rayintersect(r::Ray, s)
 end
 
 "`x`, where `x ∈ scene` and "
-function sceneintersect(r::Ray, scene::ListScene)
+function sceneintersect(r::Ray, scene)
   tnear = Inf # closest intersection point, FIXME: Type stability
   areintersections = false
 
@@ -104,7 +104,7 @@ function light(scene, geom, hitpos, nhit, bias = 1e-4)
       x = hitpos + nhit * bias
       r2 = Ray(x, light_dir)
       inter = rayintersect(r2, scene[j])
-      transmission = ifelse((i != j) & (inter.doesintersect > 0), 0.0, transmission)
+      transmission = ifelse(!(i == j) & (inter.doesintersect > 0), 0.0, transmission)
     end
     lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
     surface_color_ += map(*, lhs, scene[i].emission_color)
@@ -134,9 +134,9 @@ end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function fresneltrc(r::Ray,
-                    scene::Scene,
+                    scene,
                     depth::Integer,
-                    background::Vec3= Float64[1.0, 1.0, 1.0],
+                    background = Float64[1.0, 1.0, 1.0],
                     bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
 
