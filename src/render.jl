@@ -193,6 +193,7 @@ function render(scene::Scene;
   pixels
 end
 
+
 "Generate ray dirs and ray origins"
 function rdirs_rorigs(width::Integer=200,
                       height::Integer=200,
@@ -219,4 +220,17 @@ function rdirs_rorigs(width::Integer=200,
     j += 1
   end
   rdirs, rorigs
+end
+
+
+"Render `scene` to image of given `width` and `height`"
+function render_map(scene::Scene;
+                    rdirs,
+                    trc = fresneltrc)
+  map(dir -> trc(Ray(Float64[0.0, 0.0, 0.0], @show(dir)), scene, 0), eachrow(rdirs))  
+end
+
+function test(scene)
+  rdirs, rorigs = rdirs_rorigs(100, 100)
+  render_map(scene; rdirs = rdirs, trc = trcdepth)
 end
