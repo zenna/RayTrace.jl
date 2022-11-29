@@ -36,8 +36,9 @@ function rgbimg(img)
   # clamp.(clrimg. 0.0, 1.0)
 end
 
-function show_img()
-  img_ = render_example_spheres()
-  img = rgbimg(img_)
+
+
+function show_img(; img = render_example_spheres())
+  img = rgbimg(img)
   ImageView.imshow(img)
 end

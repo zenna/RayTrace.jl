@@ -130,7 +130,7 @@ function trcdepth(r::Ray,
   if !didhit
     return background
   else
-    # @show sigtnear = sigmoid(tnear, k=0.001 )
+    sigtnear = sigmoid(tnear, k=0.05 )
     Float64[sigtnear, sigtnear, sigtnear]
   end
 end
@@ -209,8 +209,10 @@ function render(scene::Scene;
       image[x, y, :] = pixel
     end
   end
+
   image
 end
+
 
 "Generate ray dirs and ray origins"
 function rdirs_rorigs(width::Integer=200,
@@ -238,4 +240,17 @@ function rdirs_rorigs(width::Integer=200,
     j += 1
   end
   rdirs, rorigs
+end
+
+
+"Render `scene` to image of given `width` and `height`"
+function render_map(scene::Scene;
+                    rdirs,
+                    trc = fresneltrc)
+  map(dir -> trc(Ray(Float64[0.0, 0.0, 0.0], @show(dir)), scene, 0), eachrow(rdirs))  
+end
+
+function test(scene)
+  rdirs, rorigs = rdirs_rorigs(100, 100)
+  render_map(scene; rdirs = rdirs, trc = trcdepth)
 end
