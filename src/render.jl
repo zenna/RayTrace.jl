@@ -116,7 +116,7 @@ sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function trcdepth(r::Ray,
-                  scene::Scene,
+                  scene,
                   depth::Integer,
                   background = Float64[1.0, 1.0, 1.0],
                   bias = 1e-4,
@@ -227,10 +227,12 @@ end
 function render_map(scene::Scene;
                     rdirs,
                     trc = fresneltrc)
-  map(dir -> trc(Ray(Float64[0.0, 0.0, 0.0], @show(dir)), scene, 0), eachrow(rdirs))  
+  # Scene and 0s are being reused
+  mapg((scene, dir) -> trc(Ray(Float64[0.0, 0.0, 0.0], dir), scene, 0), (scene,), rdirs)  
 end
 
-function test(scene)
-  rdirs, rorigs = rdirs_rorigs(100, 100)
+function test_render(scene)
+  rdirs, rorigs = rdirs_rorigs(3, 3)
+  rdirs = convert.(Vector, collect(eachrow(rdirs)))
   render_map(scene; rdirs = rdirs, trc = trcdepth)
 end
