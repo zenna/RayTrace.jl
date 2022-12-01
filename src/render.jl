@@ -10,14 +10,22 @@ mix(a, b, mix::Real) = b * mix + a * (1 - mix)
 "norm(x)^2"
 dot_self(x) = dot_(x, x)
 
+# function map3(f, xs)
+#   [f(xs[1]), f(xs[2]), f(xs[3])]
+# end
+
+# function map3(f, xs, ys)
+#   [f(xs[1], ys[1]), f(xs[2], ys[2]), f(xs[3], ys[3])]
+# end
+
 "dot product (without BLAS etc for generality)"
-dot_(xs, ys) = sum(xs .* ys)
+dot_(xs, ys) = sum(map(*, xs, ys))
 
 "normalized x: `x/norm(x)`"
 simplenormalize(x) = x / sqrt(dot_self(x))
 
 "x iff x > 0 else 0"
-rlu(x) = max(zero(x), x)
+rlu(x) = max(0, x)
 
 "Result of intersection between ray and object"
 mutable struct Intersection{T1, T2, T3}
@@ -27,28 +35,24 @@ mutable struct Intersection{T1, T2, T3}
 end
 
 "Intersection information between ray `r` and sphere `s`"
-function rayintersect(r::Ray, s::Sphere)
+function rayintersect(r::Ray, s)
   l = s.center - r.orig
   tca = dot_(l, r.dir)
-  radius2 = s.radius * s.radius
-
-  if tca < 0
-    return Intersection(tca, 0.0, 0.0)
-  end
-
   d2 = dot_(l, l) - tca * tca
-  if d2 > radius2
-    return Intersection(s.radius - d2, 0.0, 0.0)
+  radius2 = s.radius * s.radius
+  # d2_greater(d2, tca, r) = (r - d2, 0.0, 0.0)
+  d2_greater(d2, r) = (r - d2, 0.0, 0.0)
+  function d2_lesser(d2, tca, r2)
+    # r2 = r * r
+    thc = sqrt(r2 - d2)
+    (r2 - d2, tca - thc, tca + thc)
   end
-
-  thc = sqrt(radius2 - d2)
-  t0 = tca - thc
-  t1 = tca + thc
-  Intersection(radius2 - d2, t0, t1)
+  # return Intersection(ifelse(tca < 0, (tca, 0.0, 0.0), (d2 > radius2, d2_greater, d2_lesser, d2, tca, s.radius))...)
+  return Intersection(ifelse(tca < 0, (tca, 0.0, 0.0), cond(d2 > radius2, d2_greater, d2_lesser, (d2, s.radius), (d2, tca, radius2)))...)
 end
 
 "`x`, where `x ∈ scene` and "
-function sceneintersect(r::Ray, scene::ListScene)
+function sceneintersect(r::Ray, scene)
   tnear = Inf # closest intersection point, FIXME: Type stability
   areintersections = false
 
@@ -61,16 +65,19 @@ function sceneintersect(r::Ray, scene::ListScene)
     t1 = Inf
     r
     inter = rayintersect(r, target_sphere)
-    if inter.doesintersect > 0.0
-      if inter.t0 < 0.0
-        inter.t0 = t1
-      end
-      if inter.t0 < tnear
-        tnear = inter.t0
-        sphere = scene[i]
-        hit = true
-      end
-    end
+    # if inter.doesintersect > 0.0
+    #   if inter.t0 < 0.0
+    #     inter.t0 = t1
+    #   end
+    #   if inter.t0 < tnear
+    #     tnear = inter.t0
+    #     sphere = scene[i]
+    #     hit = true
+    #   end
+    # end
+    inter = Intersection(inter.doesintersect, ifelse((inter.doesintersect > 0.0) & (inter.t0 < 0.0), t1, inter.t0), inter.t1)
+    p = (inter.doesintersect > 0.0) & (inter.t0 < tnear)
+    hit, sphere, tnear = ifelse(p, (true, scene[i], inter.t0), (hit, sphere, tnear))
   end
   return hit, sphere, tnear
 end
@@ -79,112 +86,84 @@ end
 hitposition(r::Ray, tnear) = r.orig + r.dir * tnear 
 
 "Normal between `r` and `sphere`"
-function normal(hitpos, sphere::Sphere, tnear::Real)
-  nhit = hitpos .- center(sphere)
+function normal(hitpos, sphere, tnear)
+  nhit = hitpos - center(sphere)
+  # nhit = hitpos .- center(sphere)
   nhit = simplenormalize(nhit)
 end
 
-# using Flux 
-# using ForwardDiff
-# function Base.:-(a::ForwardDiff.Dual{Tx, V, N}, b::Flux.Tracker.TrackedReal) where {Tx, N, V <: Real}
-#   # @assert false
-#   Flux.Tracker.track(Base.:-, a, b)
-# end
-
+# There might be a mistake in calc.
 "Light contribution from all objects in scene"
-function light(scene::Scene, geom::Geometry, hitpos, nhit, bias = 1e-4)
+function light(scene, geom, hitpos, nhit, bias = 1e-4)
   surface_color_ = Float64[0.0, 0.0, 0.0]
   for i = 1:length(scene)
-    if scene[i].emission_color[1] > 0.0 # scene[i] is a light
-      transmission = 1.0
-      light_dir = scene[i].center - hitpos  # FIXME: Don't have this
-      light_dir = simplenormalize(light_dir)
-
-      for j = 1:length(scene)
-        if (i != j)
-          r2 = Ray(hitpos + nhit * bias, light_dir)
-          inter = rayintersect(r2, scene[j])
-          if (inter.doesintersect > 0)
-            transmission = 0.0
-          end
-        end
-      end
-      lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
-      surface_color_ += map(*, lhs, scene[i].emission_color)
+    transmission = 1.
+    light_dir = scene[i].center - hitpos
+    light_dir = simplenormalize(light_dir)
+    for j = 1:length(scene)
+      x = hitpos + nhit * bias
+      r2 = Ray(x, light_dir)
+      inter = rayintersect(r2, scene[j])
+      transmission = ifelse(!(i == j) & (inter.doesintersect > 0), 0.0, transmission)
     end
+    lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
+    surface_color_ = ifelse(scene[i].emission_color[1] > 0., surface_color_ + map(*, lhs, scene[i].emission_color), surface_color_)
   end
   surface_color_
 end
 
-sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
+sigmoid(x; k=0.05, x0=0) = 1 / (1+exp(-k*(x - x0)))
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function trcdepth(r::Ray,
-                  scene::Scene,
+                  scene,
                   depth::Integer,
                   background = Float64[1.0, 1.0, 1.0],
-                  bias = 1e-4,
-                  sigtnear = 0.0)
+                  bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   # hitpos = hitposition(r, tnear)
-  if !didhit
-    return background
-  else
-    # @show sigtnear = sigmoid(tnear, k=0.001 )
-    Float64[sigtnear, sigtnear, sigtnear]
-  end
+  # if !didhit
+  #   return background
+  # else
+  #   # @show sigtnear = sigmoid(tnear, k=0.001 )
+  #   Float64[sigtnear, sigtnear, sigtnear]
+  # end
+  sigtnear = sigmoid(tnear)
+  return ifelse(!didhit, background, [sigtnear, sigtnear, sigtnear])
 end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function fresneltrc(r::Ray,
-                    scene::Scene,
+                    scene,
                     depth::Integer,
-                    background::Vec3= Float64[1.0, 1.0, 1.0],
+                    background = Float64[1.0, 1.0, 1.0],
                     bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
-  if !didhit
-    return background
-  else
-    hitpos = hitposition(r, tnear)
-    # return Vec3([0.5, 0.5, 0.5])
-    nhit = normal(hitpos, geom, tnear)
-    # If the normal and the view direction are not opposite to each other
-    # reverse the normal direction. That also means we are inside the sphere so
-    # set the inside bool to true. Finally reverse the sign of IdotN which we
-    # want positive.
-    # add some bias to the point from which we will be tracing
-    inside = false
 
-    if dot_(r.dir, nhit) > 0.0
-      nhit = -nhit
-      inside = true
-    end
+  function λt(scene, geom, hitpos, nhit, bias, r, background)
+    minusrdir = r.dir * -1.0
+    facingratio = dot_(minusrdir, nhit)
 
-    # Another bounce if obj isn't reflective and not transparent
-    # Problem: Data dependent branching
-    # Want blem: Data dependent branching
-    # Want to split some of the branch and not some of the rest
-    if ((transparency(geom) > 0.0 || reflection(geom) > 0.0) && depth < 1)
-      minusrdir = r.dir * -1.0
-      facingratio = dot_(minusrdir, nhit)
+    # change the mix value to tweak the effect
+    fresneleffect = mix((1.0 - facingratio)^3, 1.0, 0.1)
 
-      # change the mix value to tweak the effect
-      fresneleffect = mix((1.0 - facingratio)^3, 1.0, 0.1)
+    # reflection direction (already normalized)
+    refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
+    reflray = Ray(hitpos + nhit * bias, refldir)
+    reflection_ = fresneltrc(reflray, scene, depth + 1, background)
 
-      # reflection direction (already normalized)
-      refldir = simplenormalize(r.dir - nhit * 2 * dot_(r.dir, nhit))
-      reflray = Ray(hitpos + nhit * bias, refldir)
-      reflection_ = fresneltrc(reflray, scene, depth + 1, background)
-
-      # the result is a mix of reflection_ and refraction (if the sphere is transparent)
-      prod = reflection_ * fresneleffect
-      surface_color_ = map(*, prod, surface_color(geom))
-    else
-      # Each light contributes to pixel colour
-      surface_color_ = light(scene, geom, hitpos, nhit, bias)
-    end
-    surface_color_ + emission_color(geom)
+    # the result is a mix of reflection_ and refraction (if the sphere is transparent)
+    prod = reflection_ * fresneleffect
+    map(*, prod, surface_color(geom))
   end
+  hitpos = hitposition(r, tnear)
+  nhit = normal(hitpos, geom, tnear)
+  inside = dot_(r.dir, nhit)
+  nhit = ifelse(dot_(r.dir, nhit) > 0.0, -nhit, nhit)
+  p = (((transparency(geom) > 0.0) | (reflection(geom) > 0.0)) & (depth < 1))
+  # surface_color_ = cond(p, λt, (scene, geom, hitpos, nhit, bias, r, background) -> light(scene, geom, hitpos, nhit, bias), scene, geom, hitpos, nhit, bias, r, background)
+  surface_color_ = cond(p, λt, light, (scene, geom, hitpos, nhit, bias, r, background), (scene, geom, hitpos, nhit, bias))
+  ifelse(!didhit, background, surface_color_ + emission_color(geom))
 end
 
 "Render `scene` to image of given `width` and `height`"
@@ -198,6 +177,7 @@ function render(scene::Scene;
   angle = tan(pi * 0.5 * fov / 100.0)
   inv_height = 1.0 / height
   aspect_ratio = width / height
+  pixels = []
  
   for y = 1:height
     for x = 1:width
@@ -206,11 +186,13 @@ function render(scene::Scene;
       minus1 = -1.0
       raydir = simplenormalize(Float64[xx, yy, -1.0])
       pixel = trc(Ray(Float64[0.0, 0.0, 0.0], raydir), scene, 0)
-      image[x, y, :] = pixel
+      Base.push!(pixels, pixel)
+      # image[x, y, :] = pixel
     end
   end
-  image
+  pixels
 end
+
 
 "Generate ray dirs and ray origins"
 function rdirs_rorigs(width::Integer=200,
@@ -235,7 +217,22 @@ function rdirs_rorigs(width::Integer=200,
     rorigs[j, :] = rorig
     # pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), spheres, 0)
     # image[x, y, :] = pixel
-    j += 1
+    j = j + 1
   end
   rdirs, rorigs
+end
+
+
+"Render `scene` to image of given `width` and `height`"
+function render_map(scene::Scene;
+                    rdirs,
+                    trc = fresneltrc)
+  # Scene and 0s are being reused
+  mapg((scene, dir) -> trc(Ray(Float64[0.0, 0.0, 0.0], dir), scene, 0), (scene,), rdirs)  
+end
+
+function test_render(scene)
+  rdirs, rorigs = rdirs_rorigs(100, 100)
+  rdirs = convert.(Vector, collect(eachrow(rdirs)))
+  render_map(scene; rdirs = rdirs, trc = trcdepth)
 end
