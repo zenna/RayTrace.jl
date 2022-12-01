@@ -18,7 +18,7 @@ end
 "Render an example scene and display it"
 function render_example_spheres()
   scene = example_spheres()
-  RayTrace.render(scene)
+  RayTrace.test_render(scene)
 end
 
 "Create an rgb image from a 3D matrix (w, h, c)"
@@ -26,10 +26,10 @@ function rgbimg(img)
   w = size(img)[1]
   h = size(img)[2]
   img = clamp.(img, 0.0, 1.0)
-  clrimg = Array{Colors.RGB{N0f8}}(undef, w, h)
+  clrimg = Array{Colors.RGB}(undef, w, h)
   for i = 1:w
     for j = 1:h
-      clrimg[i,j] = Colors.RGB{N0f8}(img[i,j,:]...)
+      clrimg[i,j] = Colors.RGB(img[i,j,:]...)
     end
   end
   clrimg
@@ -38,9 +38,18 @@ end
 
 
 
-function show_img(; img = render_example_spheres())
-  img = rgbimg(img)
-  ImageView.imshow(img)
+function show_img()
+  img = render_example_spheres()
+  image = zeros(100, 100, 3)
+  k = 1
+  for y in 1:100
+    for x in 1:100
+      image[x, y, :] = img[k]
+      k += 1
+    end
+  end
+  rgbimg(image)
+  # ImageView.imshow(img)
 end
 
 render_example_spheres()

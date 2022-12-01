@@ -22,7 +22,7 @@ dot_self(x) = dot_(x, x)
 dot_(xs, ys) = sum(map(*, xs, ys))
 
 "normalized x: `x/norm(x)`"
-simplenormalize(x) = (den = sqrt(dot_self(x)); x / den)
+simplenormalize(x) = x / sqrt(dot_self(x))
 
 "x iff x > 0 else 0"
 rlu(x) = max(0, x)
@@ -36,7 +36,7 @@ end
 
 "Intersection information between ray `r` and sphere `s`"
 function rayintersect(r::Ray, s)
-  l = map(-, s.center, r.orig)
+  l = s.center - r.orig
   tca = dot_(l, r.dir)
   d2 = dot_(l, l) - tca * tca
   radius2 = s.radius * s.radius
@@ -44,8 +44,8 @@ function rayintersect(r::Ray, s)
   d2_greater(d2, r) = (r - d2, 0.0, 0.0)
   function d2_lesser(d2, tca, r2)
     # r2 = r * r
-    tch = sqrt(r2 - d2)
-    (r2 - d2, tca - tch, tca + tch)
+    thc = sqrt(r2 - d2)
+    (r2 - d2, tca - thc, tca + thc)
   end
   # return Intersection(ifelse(tca < 0, (tca, 0.0, 0.0), (d2 > radius2, d2_greater, d2_lesser, d2, tca, s.radius))...)
   return Intersection(ifelse(tca < 0, (tca, 0.0, 0.0), cond(d2 > radius2, d2_greater, d2_lesser, (d2, s.radius), (d2, tca, radius2)))...)
@@ -76,9 +76,8 @@ function sceneintersect(r::Ray, scene)
     #   end
     # end
     inter = Intersection(inter.doesintersect, ifelse((inter.doesintersect > 0.0) & (inter.t0 < 0.0), t1, inter.t0), inter.t1)
-    tnear = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), inter.t0, tnear)
-    sphere = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), scene[i], sphere)
-    hit = ifelse((inter.doesintersect > 0.0) & (inter.t0 < tnear), true, hit)
+    p = (inter.doesintersect > 0.0) & (inter.t0 < tnear)
+    hit, sphere, tnear = ifelse(p, (true, scene[i], inter.t0), (hit, sphere, tnear))
   end
   return hit, sphere, tnear
 end
@@ -88,11 +87,12 @@ hitposition(r::Ray, tnear) = r.orig + r.dir * tnear
 
 "Normal between `r` and `sphere`"
 function normal(hitpos, sphere, tnear)
-  nhit = map(-, hitpos, center(sphere))
+  nhit = hitpos - center(sphere)
   # nhit = hitpos .- center(sphere)
   nhit = simplenormalize(nhit)
 end
 
+# There might be a mistake in calc.
 "Light contribution from all objects in scene"
 function light(scene, geom, hitpos, nhit, bias = 1e-4)
   surface_color_ = Float64[0.0, 0.0, 0.0]
@@ -107,20 +107,19 @@ function light(scene, geom, hitpos, nhit, bias = 1e-4)
       transmission = ifelse(!(i == j) & (inter.doesintersect > 0), 0.0, transmission)
     end
     lhs = surface_color(geom) * transmission * rlu(dot_(nhit, light_dir))
-    surface_color_ += map(*, lhs, scene[i].emission_color)
+    surface_color_ = ifelse(scene[i].emission_color[1] > 0., surface_color_ + map(*, lhs, scene[i].emission_color), surface_color_)
   end
   surface_color_
 end
 
-sigmoid(x; k=1, x0=0) = 1 / (1+exp(-k*(x - x0)))
+sigmoid(x; k=0.05, x0=0) = 1 / (1+exp(-k*(x - x0)))
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
 function trcdepth(r::Ray,
                   scene,
                   depth::Integer,
                   background = Float64[1.0, 1.0, 1.0],
-                  bias = 1e-4,
-                  sigtnear = 0.0)
+                  bias = 1e-4)
   didhit, geom, tnear = sceneintersect(r, scene) # FIXME Type instability
   # hitpos = hitposition(r, tnear)
   # if !didhit
@@ -129,7 +128,8 @@ function trcdepth(r::Ray,
   #   # @show sigtnear = sigmoid(tnear, k=0.001 )
   #   Float64[sigtnear, sigtnear, sigtnear]
   # end
-  return ifelse(!didhit, background, Float64[sigtnear, sigtnear, sigtnear])
+  sigtnear = sigmoid(tnear)
+  return ifelse(!didhit, background, [sigtnear, sigtnear, sigtnear])
 end
 
 "Trace a ray `r` to return a pixel colour.  Bounce ray at most `depth` times"
@@ -217,7 +217,7 @@ function rdirs_rorigs(width::Integer=200,
     rorigs[j, :] = rorig
     # pixel = trc(Ray(Vec3([0.0, 0.0, 0.0]), raydir), spheres, 0)
     # image[x, y, :] = pixel
-    j += 1
+    j = j + 1
   end
   rdirs, rorigs
 end
@@ -232,7 +232,7 @@ function render_map(scene::Scene;
 end
 
 function test_render(scene)
-  rdirs, rorigs = rdirs_rorigs(3, 3)
+  rdirs, rorigs = rdirs_rorigs(100, 100)
   rdirs = convert.(Vector, collect(eachrow(rdirs)))
   render_map(scene; rdirs = rdirs, trc = trcdepth)
 end
